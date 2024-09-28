@@ -1,0 +1,5 @@
+# ignore all .exe files
+*.exe
+
+# ignore everything in the build directory
+build/
