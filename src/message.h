@@ -1,5 +1,5 @@
 #pragma once
-
+#include <print>
 // none of this is formal. I just want to experiment.
 constexpr std::size_t PLAYER_NAME_BUFFER_SIZE = 256;
 constexpr std::size_t MESSAGE_BUFFER_SIZE = 2048; 
@@ -10,6 +10,35 @@ enum Message_Type : uint8_t
 	MESSAGE_LEAVE_SERVER,
 	MESSAGE_CHAT_MSG
 };
+
+std::string to_string(Message_Type message_type)
+{
+	std::string result{};
+	switch(message_type)
+	{
+		case MESSAGE_JOIN_SERVER :
+		{
+			result = "MESSAGE_JOIN_SERVER";
+			break;
+		}
+		case MESSAGE_LEAVE_SERVER :
+		{
+			result = "MESSAGE_LEAVE_SERVER";
+			break;
+		}
+
+		case MESSAGE_CHAT_MSG :
+		{
+			result = "MESSAGE_CHAT_MSG";
+			break;
+		}
+		default:
+			std::print("received invalid Message_Type. integer value {}. returning empty string.\n", static_cast<int>(message_type));
+			break;
+	}
+	return result;
+}
+
 
 
 // the correct way to do this is to have some sort of base message that we inherit from.
@@ -49,6 +78,13 @@ struct Chat_Message: Base_Message
 struct Join_Server_Message_C
 {
 	Message_Type message_type = Message_Type::MESSAGE_JOIN_SERVER;
+	uint8_t player_name_buffer[PLAYER_NAME_BUFFER_SIZE];
+};
+
+
+struct Leave_Server_Message_C
+{
+	Message_Type message_type = Message_Type::MESSAGE_LEAVE_SERVER;
 	uint8_t player_name_buffer[PLAYER_NAME_BUFFER_SIZE];
 };
 

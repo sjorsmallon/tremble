@@ -5,8 +5,12 @@
 
 #include "globals.hpp"
 #include "server_config.hpp"
+#include "message.h"
+#include <memory>
 using namespace std::chrono_literals;
 using namespace std::literals;
+
+static_assert(sizeof(Message_Type) == sizeof(uint8_t));
 
 int main()
 {
@@ -28,46 +32,17 @@ int main()
 			}
 			else
 			{
-				std::print("ip {} sent {}\n",ipaddr.to_string().c_str(),data.c_str());
+				std::print("received a message. deconstructing..");
+				Message_Type* message_type = reinterpret_cast<Message_Type*>(&data[0]);
+				std::print("message type = {}\n", to_string(*message_type)); 
+
+				// std::print("ip {} sent {}\n",ipaddr.to_string().c_str(), data.c_str());
 			}
 		}
 		server_socket.close();
 	});
 
-	// 	for (uint16_t i = 0; i < 2 * global::iteration_count; ++i)
-	// 	{
-	// 		UDPsocket::IPv4 ipaddr{};
-	// 		std::string data;
-	// 		if (server_socket.recv(data, ipaddr) < 0) // blocking
-	// 		{
-	// 			fprintf(stderr, "recv(): failed\n");
-	// 		}
-	// 		else
-	// 		{
-	// 			if (!data.empty())
-	// 			{
-	// 				std::print("ip {} sent {}", ipaddr.to_string().c_str(),data.c_str());
-	// 				if (data.compare(0, 8, "MESSAGE?"s) == 0)
-	// 				{
-	// 					ipaddr.port = global::port_number;
-	// 					if (i & 0x2)
-	// 					{
-
-	// 					}
-	// 					else
-	// 					{
-	// 						if (server_socket.send("MESSAGE!"s, ipaddr) < 0)
-	// 						{
-	// 							fprintf(stderr, "send(): failed (REP)\n");
-	// 						}
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// 	server_socket.close();
-	// });
-
+	
 
 	t1.join();
 

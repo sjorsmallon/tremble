@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+#include "to_byte_representation.h"
+
 
 using namespace std::literals;
 
@@ -21,7 +23,7 @@ struct vec3f_t
             float a,b,c;
         };
         struct {
-            float u,v,w;
+        float u,v,w;
         };
         float arr[3];
       };
@@ -92,14 +94,24 @@ int main(int argc, char* argv[])
         {"Three"}
     };
 
-    // message to send:
-    // Join_Server_Message message{};
-    // std::copy(player_names[0].begin(), player_names[0].end(), std::begin(message.player_name));  
+    Join_Server_Message_C join_server_message{};
+    join_server_message.player_name_buffer[0] = 's';
+    join_server_message.player_name_buffer[1] = 'j';
+    join_server_message.player_name_buffer[2] = 'o';
+    join_server_message.player_name_buffer[3] = 'r';
+    join_server_message.player_name_buffer[4] = 's';
+
+    std::string join_message_to_send = to_byte_representation(join_server_message);
 
 
+    Leave_Server_Message_C leave_server_message{};
+    assert(leave_server_message.message_type == MESSAGE_LEAVE_SERVER);
+
+    std::string leave_message_to_send = to_byte_representation(
+        leave_server_message);
 
 
-    if (client.send("HELLO"s, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
+    if (client.send(join_message_to_send, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
     {
         fprintf(stderr, "send(): failed (REQ)\n");
     }
@@ -107,8 +119,19 @@ int main(int argc, char* argv[])
     {
         fprintf(stderr, "send message succeeded.\n");
     }
+
+
+    if (client.send(leave_message_to_send, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
+    {
+        fprintf(stderr, "send(): failed (REQ)\n");
+    }
+    else 
+    {
+        fprintf(stderr, "send message succeeded.\n");
+    }
+
+
         // std::this_thread::sleep_for(global::iteration_duration);
     
     client.close();
-
 }
