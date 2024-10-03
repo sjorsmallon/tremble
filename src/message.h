@@ -1,5 +1,9 @@
 #pragma once
 #include <print>
+#include "concepts.hpp" // pod
+
+static_assert(__cplusplus == 202302L);
+
 // none of this is formal. I just want to experiment.
 constexpr std::size_t PLAYER_NAME_BUFFER_SIZE = 256;
 constexpr std::size_t MESSAGE_BUFFER_SIZE = 2048; 
@@ -94,10 +98,3 @@ struct Chat_Message_C
 	uint8_t message_buffer[MESSAGE_BUFFER_SIZE];
 };
 
-
-//@NOTE(SJM): Temporary
-template<typename Type>
-struct Message
-{
-	Type* message_ptr;
-};

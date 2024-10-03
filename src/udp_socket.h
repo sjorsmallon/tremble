@@ -22,8 +22,11 @@
 #include <string>
 #include <vector>
 
+#include "packet.hpp"
+
 
 //@NOTE(SJM): this is lifted from https://github.com/barczynsky/UDPsocket.
+// it is adapted to not use a string but a packet.
 
 class UDPsocket
 {
@@ -182,16 +185,15 @@ public:
 	}
 
 public:
-	template <typename T, typename = typename
-		std::enable_if<sizeof(typename T::value_type) == sizeof(uint8_t)>::type>
-	int send(const T& message, const IPv4& ipaddr) const
+	
+	int send(const Packet& message, const IPv4& ipaddr) const
 	{
 		// // UPnP
 		// std::string msg = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: ssockp:discover\r\nST: ssockp:all\r\nMX: 1\r\n\r\n";
 		sockaddr_in_t addr_in = ipaddr;
 		socklen_t addr_in_len = sizeof(addr_in);
 		int ret = ::sendto(sock,
-			(const char*)message.data(), message.size(), 0,
+			(const char*)&message, sizeof(message), 0,
 			(sockaddr_t*)&addr_in, addr_in_len);
 		if (ret < 0) {
 			return (int)Status::SendError;
@@ -199,21 +201,25 @@ public:
 		return ret;
 	}
 
-	template <typename T, typename = typename
-		std::enable_if<sizeof(typename T::value_type) == sizeof(uint8_t)>::type>
-	int recv(T& message, IPv4& ipaddr) const
+	// template <typename T, typename = typename
+	// 	std::enable_if<sizeof(typename T::value_type) == sizeof(uint8_t)>::type>
+	int recv(Packet& message, IPv4& ipaddr) const
 	{
 		sockaddr_in_t addr_in;
 		socklen_t addr_in_len = sizeof(addr_in);
-		typename T::value_type buffer[10 * 1024]; // uh...
+		// typename T::value_type buffer[10 * 1024];
+		Packet destination; 
 		int ret = ::recvfrom(sock,
-			(char*)buffer, sizeof(buffer), 0,
+			(char*)&destination, sizeof(destination), 0,
 			(sockaddr_t*)&addr_in, &addr_in_len);
-		if (ret < 0) {
+		
+		if (ret < 0)
+		{
 			return (int)Status::RecvError;
 		}
 		ipaddr = addr_in;
-		message = { std::begin(buffer), std::begin(buffer) + ret };
+		// message = { std::begin(buffer), std::begin(buffer) + ret };
+		message = destination;
 		return ret;
 	}
 
@@ -231,7 +237,7 @@ public:
 	{
 		uint16_t portno = IPv4{ self_addr }.port;
 		auto ipaddr = IPv4::Loopback(portno);
-		return this->send(msg_t{}, ipaddr);
+		return this->send(Packet{}, ipaddr);
 	}
 
 public:
