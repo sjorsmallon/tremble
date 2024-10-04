@@ -52,6 +52,7 @@ int main(int argc, char* argv[])
             {
                 std::print("send message succeeded.\n");
             }
+            std::this_thread::sleep_for(100ms);
         }
     // });
 
