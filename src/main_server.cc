@@ -39,9 +39,10 @@ int main()
 		// TODO: signal when we are complete.
 		auto packet_count = 0;
 		byte_offset_from_start = 0;
+		
+		UDPsocket::IPv4 ipaddr{};
 		while (true)
 		{
-			UDPsocket::IPv4 ipaddr{};
 			Packet packet{};
 			if (server_socket.recv(packet, ipaddr) < 0) // blocking
 			{
@@ -56,13 +57,8 @@ int main()
 				if (packet_header.sequence_id > 0)
 				{
 					assert(packet_header.sequence_count >= packet_header.sequence_idx);
-					// insert the packet data in the right place.
-					// just write it out.
-					// auto byte_offset_from_start =  * packet_header.sequence_idx; // this goes wrong for the last element. only after copying, increment the byte offset.
 					std::memcpy(&buffer[byte_offset_from_start], &packet.buffer, packet_header.payload_size);
-					
 					byte_offset_from_start += packet_header.payload_size;
-
 				}
 				else
 				{

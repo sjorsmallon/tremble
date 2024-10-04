@@ -1,14 +1,10 @@
-#include <vector>
-#include <string>
-#include <numeric>
-#include <cassert>
-#include <thread>
-#include "udp_socket.h"
 
-#include "globals.hpp"
-#include "server_config.hpp"
-#include "concepts.hpp" // podvector
-#include "packet.hpp"
+#include <print>
+
+
+#include "../src/packet.hpp"
+#include "../src/concepts.hpp"
+#include <cassert>
 
 
 struct Position
@@ -18,17 +14,8 @@ struct Position
     float z;
 };
 
-
-int main(int argc, char* argv[])
+static void podvector_test()
 {
-
-
-    UDPsocket client{};
-    client.open();
-    client.broadcast(true);
-
-    uint8_t start = 0;
-
     PodVector<Position> positions{};
     positions.resize(2048);
     for (int idx = 0; idx != 2048; ++idx)
@@ -39,36 +26,13 @@ int main(int argc, char* argv[])
         position.z = idx;
     }
 
-    std::print("max buffer size:{}\n", MAX_BUFFER_SIZE_IN_BYTES);
-    std::print("vec3 byte size: :{}\n", sizeof(Position));
-    std::print("total data size: {}\n", sizeof(Position) * positions.size());
 
     std::vector<Packet> packets = convert_to_packets(positions);
-    std::print("sending {} packets.\n", packets.size());
 
-    // auto t1 = std::thread([&]{
-        for (auto& packet: packets)
-        {
-            if (client.send(packet, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
-            {
-                std::print("send(): failed (REQ)\n");
-            }
-            else 
-            {
-                std::print("send message succeeded.\n");
-            }
-            std::this_thread::sleep_for(200ms);
-        }
-    // });
-
-    // t1.join();
-
+    // for the reconstruct test.    
+    auto buffer = std::vector<uint8_t>{}; // 1mb?
+    buffer.resize(std::size_t{2048 * 2048});
     
-   client.close();
-
-
-
-
     auto byte_offset_from_start = 0;
     for (auto& packet: packets)
     {
@@ -86,9 +50,6 @@ int main(int argc, char* argv[])
     }
 
 
-    // for the reconstruct test.    
-    auto buffer = std::vector<uint8_t>{}; // 1mb?
-    buffer.resize(std::size_t{2048 * 2048});
 
     Position* reconstructed_positions = reinterpret_cast<Position*>(buffer.data());
     for (int idx = 0; idx != 2048; ++idx)
@@ -99,6 +60,15 @@ int main(int argc, char* argv[])
         assert(static_cast<int>( reconstructed_positions[idx].z) == idx);
 
     }
+}
+static void pod_test()
+{
+	
+}
+
+int main()
+{
+
 
 
 }

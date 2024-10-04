@@ -42,7 +42,7 @@ std::vector<Packet> convert_to_packets(const Type& input)
  	{
  		std::print("Pod<Type>\n");
 		auto byte_count = sizeof(input);
-		auto packet_count = 1 + ((sizeof(Packet) - 1) / byte_count); // if x != 0
+		auto packet_count = 1 + ( byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
 		auto packets = std::vector<Packet>{packet_count};
 
 		//FIXME: uh..
@@ -81,17 +81,11 @@ std::vector<Packet> convert_to_packets(const Type& input)
 
 		uint8_t sequence_id = 1; //FIXME: do something better.
 		uint8_t packet_idx_in_sequence = 0;
-		
-		// uint8_t max_elements_per_packet = MAX_BUFFER_SIZE_IN_BYTES / type_size;
-		// chunk = max amount of contiguous elements of that type that can be written in the payload (note to self: )
-		// auto type_chunk_size = type_size * max_elements_per_packet;	
-		// THIS DOES NOT MATTER, SINCE WE RECONSTRUCT AT THE VERY END ANYWAY!
 
 		// Pack this. if we split up the struct, do not commit to it.
 		for (auto& packet: packets)
 		{
 	        // calculate the offset to copy data into the current packet's buffer. 
-	        // note that instead of multiplying by max_buffer_size, we take max_elements_per_packet * type_size.
 	        size_t offset = packet_idx_in_sequence * MAX_BUFFER_SIZE_IN_BYTES;
 	        size_t remaining_bytes = byte_count - offset;
 
