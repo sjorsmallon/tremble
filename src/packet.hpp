@@ -1,6 +1,7 @@
 #pragma once
 #include <type_traits>
 #include <print>
+#include <cassert>
 #include "concepts.hpp"
 
 
@@ -42,7 +43,7 @@ std::vector<Packet> convert_to_packets(const Type& input)
  	{
  		std::print("Pod<Type>\n");
 		auto byte_count = sizeof(input);
-		auto packet_count = 1 + ( byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
+		auto packet_count = (1 + ( byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
 		auto packets = std::vector<Packet>{packet_count};
 
 		//FIXME: uh..

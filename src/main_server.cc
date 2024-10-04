@@ -20,6 +20,34 @@ struct Position
     float z;
 };
 
+constexpr int MAX_CLIENTS = 64;
+
+struct Server
+{
+    int max_clients = MAX_CLIENTS;
+    int connected_clients_count;
+    bool client_connected[MAX_CLIENTS];
+    Address client_addresses[MAX_CLIENTS];
+};
+
+int find_free_client_index(Server& server)
+{
+    for (int idx = 0; idx < server.max_clients; ++idx)
+    {
+        if (!m_clientConnected[idx])
+        {
+            return idx;
+        }
+    }
+    return -1; // sentinel value.
+}
+
+
+
+
+
+
+
 int main()
 {
 	auto buffer = std::vector<uint8_t>{}; // 1mb?
