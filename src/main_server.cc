@@ -23,7 +23,7 @@ struct Position
 int main()
 {
 	auto buffer = std::vector<uint8_t>{}; // 1mb?
-	buffer.reserve(std::size_t{1024 * 1024});
+	buffer.resize(std::size_t{2048 * 2048});
 
 	auto t1 = std::thread([&]
 	{
@@ -36,8 +36,9 @@ int main()
 		// the buffer will be the reconstructed contiguous representation of the messages.
 		// this means that if messages arrive OoO, we will have segments of the buffer
 		// that are still zero.
-
+		// TODO: signal when we are complete.
 		auto packet_count = 0;
+		byte_offset_from_start = 0;
 		while (true)
 		{
 			UDPsocket::IPv4 ipaddr{};
@@ -57,8 +58,10 @@ int main()
 					assert(packet_header.sequence_count >= packet_header.sequence_idx);
 					// insert the packet data in the right place.
 					// just write it out.
-					auto byte_offset_from_start = packet_header.payload_size * packet_header.sequence_idx;
+					// auto byte_offset_from_start =  * packet_header.sequence_idx; // this goes wrong for the last element. only after copying, increment the byte offset.
 					std::memcpy(&buffer[byte_offset_from_start], &packet.buffer, packet_header.payload_size);
+					
+					byte_offset_from_start += packet_header.payload_size;
 
 				}
 				else
@@ -73,10 +76,6 @@ int main()
 			}
 		}
 
-		// just run this for 255 whatever
-
-
-
 		server_socket.close();
 	});
 
@@ -85,9 +84,15 @@ int main()
 
 	Position* positions = reinterpret_cast<Position*>(buffer.data());
 
-	for (int idx = 0; idx != 255; ++idx)
+	for (int idx = 0; idx != 2048; ++idx)
 	{
-		std::print("position.x:{}, position.y: {}, position.z: {}\n", positions[idx].x, positions[idx].y, positions[idx].z);
+		std::print("idx: {},position.x:{}, position.y: {}, position.z: {}\n",idx, positions[idx].x, positions[idx].y, positions[idx].z);
+
+
+		assert(static_cast<int>( positions[idx].x) == idx);
+		assert(static_cast<int>( positions[idx].y) == idx);
+		assert(static_cast<int>( positions[idx].z) == idx);
+
 	}
 
 }

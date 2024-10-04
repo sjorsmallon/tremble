@@ -35,7 +35,7 @@ struct Packet
 static_assert(sizeof(Packet) <= 1452);
 
 template <typename Type>
-requires  Pod<Type> || PodVectorConcept<Type>
+requires Pod<Type> || PodVectorConcept<Type>
 std::vector<Packet> convert_to_packets(const Type& input)
 {
  	if constexpr (Pod<Type>)
@@ -71,36 +71,42 @@ std::vector<Packet> convert_to_packets(const Type& input)
 		return packets;
     } else // if(podvector<>)
     {
- 		std::print("podvector<Type>\n");
-
-    	auto byte_count = sizeof(input[0]) * input.size();
-		auto packet_count = 1 + ((byte_count - 1) / sizeof(Packet) ); // if x != 0
+ 		// std::print("podvector<Type>\n");
+    	auto byte_count = sizeof(typename Type::value_type) * input.size();
+		auto packet_count = 1 + ((byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
 		auto packets = std::vector<Packet>{packet_count};
+		std::print("allocated {} packets\n", packet_count);
 
     	assert(packet_count < UINT8_MAX);
 
 		uint8_t sequence_id = 1; //FIXME: do something better.
 		uint8_t packet_idx_in_sequence = 0;
+		
+		// uint8_t max_elements_per_packet = MAX_BUFFER_SIZE_IN_BYTES / type_size;
+		// chunk = max amount of contiguous elements of that type that can be written in the payload (note to self: )
+		// auto type_chunk_size = type_size * max_elements_per_packet;	
+		// THIS DOES NOT MATTER, SINCE WE RECONSTRUCT AT THE VERY END ANYWAY!
 
-		auto struct_size = sizeof(typename Type::value_type);
-		uint8_t max_elements_per_packet = MAX_BUFFER_SIZE_IN_BYTES / sizeof(struct_size);
-		auto struct_chunk_size = struct_size * max_elements_per_packet;	
-		// let us neatly pack this. if we split up the pod type, we do not commit to it.
+		// Pack this. if we split up the struct, do not commit to it.
 		for (auto& packet: packets)
 		{
 	        // calculate the offset to copy data into the current packet's buffer. 
-	        // note that instead of multiplying by max_buffer_size, we take max_elements_per_packet * struct_size.
-	        size_t offset = packet_idx_in_sequence * struct_chunk_size;
+	        // note that instead of multiplying by max_buffer_size, we take max_elements_per_packet * type_size.
+	        size_t offset = packet_idx_in_sequence * MAX_BUFFER_SIZE_IN_BYTES;
 	        size_t remaining_bytes = byte_count - offset;
-	        size_t chunk_size = (remaining_bytes < struct_chunk_size) ? remaining_bytes : struct_chunk_size;
+
+	        if (remaining_bytes < MAX_BUFFER_SIZE_IN_BYTES) std::print("filling last packet, id: {}, remaining_bytes: {}\n",
+	        	packet_idx_in_sequence, remaining_bytes);
+
+	        size_t chunk_size = (remaining_bytes < MAX_BUFFER_SIZE_IN_BYTES) ? remaining_bytes : MAX_BUFFER_SIZE_IN_BYTES;
 
 	        // fill the packet buffer with the appropriate data from the pod
 	        std::memcpy(packet.buffer, reinterpret_cast<const uint8_t*>(input.data()) + offset, chunk_size);
 
-	        packet.header.sequence_id = sequence_id;
+	        packet.header.sequence_id    = sequence_id;
 			packet.header.sequence_count = packet_count;
-			packet.header.sequence_idx = packet_idx_in_sequence;
-			packet.header.payload_size = chunk_size;
+			packet.header.sequence_idx   = packet_idx_in_sequence;
+			packet.header.payload_size   = chunk_size;
 
 			packet_idx_in_sequence += 1;
 		}
