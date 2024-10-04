@@ -28,7 +28,8 @@ int main(int argc, char* argv[])
 
     uint8_t start = 0;
 
-    PodVector<Position> positions{2048};
+    PodVector<Position> positions{};
+    positions.resize(2048);
     for (int idx = 0; idx != 2048; ++idx)
     {
         auto& position = positions[idx];
@@ -38,19 +39,24 @@ int main(int argc, char* argv[])
     }
 
     std::vector<Packet> packets = convert_to_packets(positions);
- 
-    // for (packet: packets)
-    // {
-    //     if (client.send(packet, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
-    //     {
-    //         fprintf(stderr, "send(): failed (REQ)\n");
-    //     }
-    //     else 
-    //     {
-    //         fprintf(stderr, "send message succeeded.\n");
-    //     }
+    std::print("sending {} packets.\n", packets.size());
+
+    // auto t1 = std::thread([&]{
+        for (auto& packet: packets)
+        {
+            if (client.send(packet, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
+            {
+                std::print("send(): failed (REQ)\n");
+            }
+            else 
+            {
+                std::print("send message succeeded.\n");
+            }
+        }
+    // });
+
+    // t1.join();
+
     
-    // }
-    
-    // client.close();
+   client.close();
 }

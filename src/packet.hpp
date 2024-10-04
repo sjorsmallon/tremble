@@ -1,8 +1,10 @@
 #pragma once
 #include <type_traits>
+#include <print>
 #include "concepts.hpp"
 
-// constexpr uint8_t UINT8_MAX = 255;
+
+constexpr int no_sequence_id = 0;
 
 // Ethernet MTU: 1,500 bytes (the most common), which includes the size of the entire IP packet.
 // Subtracting headers, the actual safe UDP payload size without fragmentation is around 1,472 bytes (for IPv4) and 1,452 bytes (for IPv6).
@@ -38,6 +40,7 @@ std::vector<Packet> convert_to_packets(const Type& input)
 {
  	if constexpr (Pod<Type>)
  	{
+ 		std::print("Pod<Type>\n");
 		auto byte_count = sizeof(input);
 		auto packet_count = 1 + ((sizeof(Packet) - 1) / byte_count); // if x != 0
 		auto packets = std::vector<Packet>{packet_count};
@@ -45,7 +48,7 @@ std::vector<Packet> convert_to_packets(const Type& input)
 		//FIXME: uh..
 		assert(packet_count < UINT8_MAX);
 
-		uint8_t sequence_id = 0; //FIXME: do something better.
+		uint8_t sequence_id = 1; //FIXME: do something better.
 		uint8_t packet_idx_in_sequence = 0;
 		for (auto& packet: packets)
 		{
@@ -68,13 +71,15 @@ std::vector<Packet> convert_to_packets(const Type& input)
 		return packets;
     } else // if(podvector<>)
     {
+ 		std::print("podvector<Type>\n");
+
     	auto byte_count = sizeof(input[0]) * input.size();
-		auto packet_count = 1 + ((sizeof(Packet) - 1) / byte_count); // if x != 0
+		auto packet_count = 1 + ((byte_count - 1) / sizeof(Packet) ); // if x != 0
 		auto packets = std::vector<Packet>{packet_count};
 
     	assert(packet_count < UINT8_MAX);
 
-		uint8_t sequence_id = 0; //FIXME: do something better.
+		uint8_t sequence_id = 1; //FIXME: do something better.
 		uint8_t packet_idx_in_sequence = 0;
 
 		auto struct_size = sizeof(typename Type::value_type);

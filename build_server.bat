@@ -1,1 +1,1 @@
-clang -std=c++23 src/main_server.cc -o build/server.exe
+clang -std=c++23 src/main_server.cc -o build/server.exe -g
