@@ -1,0 +1,1 @@
+clang -std=c++23 tst/client_server.cc -o build/test_client_server.exe -g & clang -std=c++23 tst/AABB_test.cc -o build/AABB_test.exe -g
