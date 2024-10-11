@@ -3,7 +3,9 @@
 
 #define SDL_MAIN_HANDLED
 
-// argc and argv[] are necessary for SDL
+//TODO: figure out why this window completely detaches from the console?
+
+// argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
 	static SDL_Window* window = nullptr;
