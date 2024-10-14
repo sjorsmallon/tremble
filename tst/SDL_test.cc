@@ -1,5 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <glad/glad.h>
+#include <print>
 
 #define SDL_MAIN_HANDLED
 
@@ -9,22 +11,23 @@
 int main(int argc, char *argv[])
 {
 	static SDL_Window* window = nullptr;
-	static SDL_Renderer* renderer = nullptr;
-
     SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
 
-    if (!SDL_Init(SDL_INIT_VIDEO))
-    {
-        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
 
-    if (!SDL_CreateWindowAndRenderer("AAAAAAAAAA", 640, 480, 0, &window, &renderer)) {
-        SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
+    // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
+    window = SDL_CreateWindow(
+        "SDL3/OpenGL Demo", 640, 480, 
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  
+    SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 5);
+    SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
+    // Create an OpenGL context associated with the window.
+    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 
+    // do some fuckery with glad to actually load modern opengl.
+    gladLoadGL();
 
 	// Main loop flag
     bool running = true;
@@ -33,23 +36,36 @@ int main(int argc, char *argv[])
     SDL_Event event;
 
     // Main loop
-    while (running) {
+    while (running)
+    {
+
         // Process events
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
+        while (SDL_PollEvent(&event))
+        {
+            if (event.type == SDL_EVENT_QUIT)
+            {
                 running = false;
             }
             // Additional event handling can go here (e.g., input, window events)
         }
 
-        // Clear the screen (e.g., with black color)
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
+        glClearColor(1.0f,0,0,1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
 
         // Your rendering code goes here (e.g., drawing shapes, textures, etc.)
 
+
+
+
+
+
         // Present the current buffer to the screen
-        SDL_RenderPresent(renderer);
+        SDL_GL_SwapWindow(window);
+
     }
+
+
+    SDL_GL_DestroyContext(gl_context);
 
 }
