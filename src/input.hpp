@@ -13,7 +13,8 @@ enum class Key
 
 enum class Mouse
 {
-	MOUSE_LEFT = 0,
+	MOUSE_PLACEHOLDER = 0,
+	MOUSE_LEFT,
 	MOUSE_RIGHT,
 	MOUSE_SCROLL,
 	MOUSE_FORWARD,

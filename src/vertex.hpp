@@ -10,6 +10,8 @@ struct vertex_xnc
 	vec4 color;  // 16 bytes (40)
 }; 
 
+static_assert(sizeof(vertex_xnc) == 40);
+
 
 // Define formatter specialization for vec3 (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)
 template <>

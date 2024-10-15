@@ -1,5 +1,4 @@
 #include "../src/AABB.hpp"
-#include "../src/utility.hpp" // for to_vertices(AABBs).
 #include <string>
 
 
@@ -13,7 +12,7 @@ int main()
 		std::print("{}\n", aabb);
 	}
 
-	auto vertices = to_vertices(aabbs);
+	auto vertices = to_vertex_xnc(aabbs);
 	for (auto& vertex: vertices)
 	{
 		std::print("{}\n", vertex);

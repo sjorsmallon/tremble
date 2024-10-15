@@ -1,17 +1,19 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <glad/glad.h>
-#include <print>
-
-
-#include "../src/input.hpp"
-
 #define SDL_MAIN_HANDLED
 
+#include <glad/glad.h>
+#include <print>
+#include "../src/input.hpp"
+#include "../src/gl_helpers.hpp"
+#include "../src/AABB.hpp"
+
+#include <glad/glad.h>
+
 // this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
-static Key to_key(SDL_Event& event)
+static Key to_key(const SDL_Event& event)
 {
-    static constexpr auto mapping = std::initializer_list<std::pair<uint32_t, Key>>{
+    static constexpr auto mapping = std::initializer_list<std::pair<uint32_t, Key>> {
         {SDLK_W, Key::KEY_W},
         {SDLK_ESCAPE, Key::KEY_ESCAPE},
         {SDLK_A ,Key::KEY_A},
@@ -30,9 +32,9 @@ static Key to_key(SDL_Event& event)
     return Key::KEY_PLACEHOLDER;
 }
 
-static Mouse to_mouse(SDL_Event& event)
+static Mouse to_mouse(const SDL_Event& event)
 {
-
+    return Mouse::MOUSE_PLACEHOLDER;
 }
 
 void handle_keyboard_input(Key key)
@@ -57,40 +59,46 @@ void handle_keyboard_input(Key key)
             std::print("unreachable.\n");
             break;            
         }
-
     }
 }
 
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
+
 	static SDL_Window* window = nullptr;
+    SDL_GLContext gl_context{};
+    {
+        SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
 
-    SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
+        // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
+        window = SDL_CreateWindow(
+            "SDL3/OpenGL Demo", 1920, 1080, 
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+      
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
-    window = SDL_CreateWindow(
-        "SDL3/OpenGL Demo", 1920, 1080, 
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-  
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        // Create an OpenGL context associated with the window.
+        gl_context = SDL_GL_CreateContext(window);
+        // do some trickery with glad to actually load modern opengl.
+        gladLoadGL();
+    }
+    
+    set_global_gl_settings();
 
-    // Create an OpenGL context associated with the window.
-    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
-    // do some trickery with glad to actually load modern opengl.
-    gladLoadGL();
+    auto path = std::string{"data/list_of_AABB"};
+    auto aabbs = read_AABBs_from_file(path);
+    auto vertices  = to_vertex_xnc(aabbs);
+    auto gl_buffer = create_interleaved_xnc_buffer(vertices);
 
 
     bool running = true;
-
     SDL_Event event;
-
     // Main loop
     while (running)
     {
-
         // Process events
         while (SDL_PollEvent(&event))
         {
@@ -122,4 +130,5 @@ int main(int argc, char *argv[])
 
     SDL_GL_DestroyContext(gl_context);
 
+    return 0;
 }
