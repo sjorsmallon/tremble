@@ -7,6 +7,30 @@
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
+
+const char* vertex_shader_src = R"(
+#version 330 core
+layout(location = 0) in vec3 position_vert_in;
+layout(location = 1) in vec3 normal_vert_in;
+layout(location = 2) in vec4 color_vert_in;
+
+layout(location = 0) out vec4 color_frag_in
+
+void main() {
+    gl_Position = vec4(position_vert_in, 1.0);
+    color_frag_in = color_vert_in;
+})";
+
+const char* fragment_shader_src = R"(
+#version 330 core
+layout(location = 0) in vec4 color_frag_in;
+out vec4 FragColor;
+void main() {
+    FragColor = color_frag_in;
+})";
+
+
+
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {

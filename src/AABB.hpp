@@ -59,6 +59,7 @@ inline std::vector<AABB> read_AABBs_from_file(std::string& filename)
     while (std::getline(file, line))
     {
         if (line.empty()) continue;  // Skip empty lines
+        if (line.starts_with('#')) continue; // skip comments
         aabbs.push_back(parse_line_to_aabb(line));
     }
 
@@ -71,6 +72,11 @@ inline std::vector<AABB> read_AABBs_from_file(std::string& filename)
 // I do not know where to put these, but to create a whole new file was confusing me 1 sessions later.
 inline std::vector<vertex_xnc> to_vertex_xnc(AABB& aabb)
 {
+	// clang does not like initialization of the union vec3 like this. it starts complaining about missing brackets.
+	// but I think this should be fine.
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wmissing-braces"
+
 	auto vertices = std::vector<vertex_xnc>{
         vertex_xnc{.position = vec3{aabb.min.x, aabb.min.y, aabb.min.z}, .normal = vec3{1.0f, 0.0f, 0.0f}, .color = {1.f, 0.f, 0.f}}, // 0
         vertex_xnc{.position = vec3{aabb.max.x, aabb.min.y, aabb.min.z}, .normal = vec3{1.0f, 0.0f, 0.0f}, .color = {0.f, 1.f, 0.f}}, // 1
@@ -81,6 +87,7 @@ inline std::vector<vertex_xnc> to_vertex_xnc(AABB& aabb)
         vertex_xnc{.position = vec3{aabb.max.x, aabb.max.y, aabb.max.z}, .normal = vec3{1.0f, 0.0f, 0.0f}, .color = {1.f, 0.f, 0.f}}, // 6
         vertex_xnc{.position = vec3{aabb.min.x, aabb.max.y, aabb.max.z}, .normal = vec3{1.0f, 0.0f, 0.0f}, .color = {0.f, 1.f, 0.f}}  // 7
     };
+	#pragma clang diagnostic pop
 
     auto indices = std::vector<uint32_t>{
         0, 1, 2, 0, 2, 3, // Front face
