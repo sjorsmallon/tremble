@@ -21,3 +21,5 @@ struct std::formatter<vertex_xnc> : std::formatter<std::string> {
         return std::format_to(ctx.out(), "position: {}, normal: {},color: {})", vertex.position, vertex.normal, vertex.color);
     }
 };
+
+
