@@ -23,6 +23,7 @@ executable('test_client_server',
 # Build AABB_test
 executable('AABB_test',
   'tst/AABB_test.cc',
+  include_directories : inc_dir,
   install : false
 )
 

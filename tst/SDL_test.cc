@@ -90,6 +90,7 @@ void handle_keyboard_input(Key key)
     }
 }
 
+// there is a better abstraction here that will come later.
 static void draw_AABBS(
     const uint32_t VAO,
     const uint32_t VBO,
@@ -99,12 +100,6 @@ static void draw_AABBS(
     const glm::mat4& view
     )
 {
-    //@Hardcode: fov, window_width, window_height.
-    int width = 1920;
-    int height = 1080;
-
-    // glm::mat4 projection = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 200.0f);
-    // glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f)); // Move the camera back 3 units
     glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
  
     glUseProgram(shader_program);
@@ -116,48 +111,64 @@ static void draw_AABBS(
     glDrawArrays(GL_TRIANGLES, 0, vertex_count);
 }
 
-
-
-// argc and argv[] are necessary for SDL3 main compatibility trickery.
-int main(int argc, char *argv[])
+static void draw_grid(
+    const uint32_t VAO,
+    const uint32_t VBO,
+    const size_t vertex_count,
+    const uint32_t shader_program,
+    const glm::mat4& projection,
+    const glm::mat4& view
+    )
 {
-    int window_width = 1920;
-    int window_height = 1080;
-	SDL_Window* window = nullptr;
-    SDL_GLContext gl_context{};
-    {
-        SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
+    glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
+ 
+    glUseProgram(shader_program);
+    set_uniform(shader_program, "model", model);
+    set_uniform(shader_program, "view", view);
+    set_uniform(shader_program, "projection", projection);
 
-        // Enable relative mouse mode and capture the mouse
-        SDL_CaptureMouse(true);
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_LINES, 0, vertex_count);
+}
 
-        // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
-        window = SDL_CreateWindow(
-            "SDL3/OpenGL Demo", window_width, window_height, 
-            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-      
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-        // Create an OpenGL context associated with the window.
-        gl_context = SDL_GL_CreateContext(window);
-        // do some trickery with glad to actually load modern opengl.
-        gladLoadGL();
+uint32_t create_x_shader_program()
+{
+    const char* x_vertex_shader_src = R"(
+    #version 330 core
 
-        // huh. even though I did not do this, it seems to not help.
-        SDL_GL_MakeCurrent(window, gl_context);
+    layout(location = 0) in vec3 position;
+
+    uniform mat4 model;
+    uniform mat4 view;
+    uniform mat4 projection;
+
+    void main() {
+        gl_Position = projection * view * model * vec4(position, 1.0);
     }
-    
-    set_global_gl_settings();
+    )";
 
+    const char* x_fragment_shader_src = R"(
+    #version 330 core
 
-    // drawing related stuff.
-    auto path = std::string{"../data/list_of_AABB"};
-    auto aabbs = read_AABBs_from_file(path);
-    auto vertices  = to_vertex_xnc(aabbs);
-    auto aabb_gl_buffer = create_interleaved_xnc_buffer(vertices);
+    out vec4 FragColor;
 
+    void main() {
+        // Hardcoded line color (white)
+        FragColor = vec4(1.0, 1.0, 1.0, 1.0); // RGB + Alpha (opacity)
+    }
+    )";
+
+    auto x_shader_program = create_shader_program(
+        x_vertex_shader_src,
+        x_fragment_shader_src
+    );
+
+    return x_shader_program;
+}
+
+uint32_t create_interleaved_xnc_shader_program()
+{
     const char* vertex_shader_src = R"(
         #version 410
         layout(location = 0) in vec3 position_vert_in;
@@ -184,10 +195,10 @@ int main(int argc, char *argv[])
             else // if (gl_VertexID % 3 == 2)
                 barycentric = vec3(0.0, 0.0, 1.0); // Third vertex
 
-
             normal_frag_in = mat3(transpose(inverse(model))) * normal_vert_in; // Transform the normal to world space
-            color_frag_in = color_vert_in; // Pass vertex color to fragment shader
             position_frag_in = vec3(model * vec4(position_vert_in, 1.0)); // Transform the vertex position to world space
+            color_frag_in = color_vert_in; // Pass vertex color to fragment shader
+
             gl_Position = projection * view * vec4(position_frag_in, 1.0); // Apply projection and view transformations
         })";
 
@@ -231,10 +242,65 @@ int main(int argc, char *argv[])
             color_frag_out = resulting_color;
     })";
 
+
     auto shader_program = create_shader_program(
         vertex_shader_src,
         fragment_shader_src
     );
+    return shader_program;
+}
+
+
+// argc and argv[] are necessary for SDL3 main compatibility trickery.
+int main(int argc, char *argv[])
+{
+    int window_width = 1920;
+    int window_height = 1080;
+	SDL_Window* window = nullptr;
+    SDL_GLContext gl_context{};
+    {
+        SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
+
+        // Enable relative mouse mode and capture the mouse
+        SDL_CaptureMouse(true);
+        SDL_HideCursor();
+
+        // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
+        window = SDL_CreateWindow(
+            "SDL3/OpenGL Demo", window_width, window_height, 
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+      
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+        // Create an OpenGL context associated with the window.
+        gl_context = SDL_GL_CreateContext(window);
+        // do some trickery with glad to actually load modern opengl.
+        gladLoadGL();
+
+        // huh. even though I did not do this, it seems to not help.
+        SDL_GL_MakeCurrent(window, gl_context);
+    }
+    
+    set_global_gl_settings();
+
+
+    // drawing related stuff.
+    auto path = std::string{"../data/list_of_AABB"};
+    auto aabbs = read_AABBs_from_file(path);
+    auto vertices  = to_vertex_xnc(aabbs);
+    auto aabb_gl_buffer = create_interleaved_xnc_buffer(vertices);
+
+    uint32_t shader_program = create_interleaved_xnc_shader_program();
+    uint32_t x_shader_program = create_x_shader_program();
+
+    float grid_size = 1000.0f;
+    float grid_spacing = 10.0f;
+
+    // to be interpreted as (start, end).
+    auto grid_vertices = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
+    auto grid_gl_buffer=  create_x_buffer(grid_vertices);
 
     bool running = true;
     SDL_Event event;
@@ -243,15 +309,27 @@ int main(int argc, char *argv[])
     auto camera = Camera{};    
     float move_speed = 10.0f;
     float mouse_sensitivity = 2.0f;
+    float fov = 90.0f;
+    float near_z = 0.1f;
+    float far_z = 500.f;
     float dt = 0.f;
     float now = SDL_GetPerformanceCounter();
     float last = 0.f;
+    float mouse_x;
+    float mouse_y;
+    float last_mouse_x;
+    float last_mouse_y;
+
+
 
     while (running)
     {
          last = now;
          now = SDL_GetPerformanceCounter();
          dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
+
+         last_mouse_x = mouse_x;
+         last_mouse_y = mouse_y;
 
         // Process events
         while (SDL_PollEvent(&event))
@@ -268,40 +346,51 @@ int main(int argc, char *argv[])
                 running = false;
             }
 
-            if (event.type == SDL_EVENT_MOUSE_MOTION)
-            {
-                auto& mouse_move = event.motion;
-                float dx = mouse_move.xrel;
-                float dy = mouse_move.yrel;
-
-                camera = look_around(camera, dx, dy, mouse_sensitivity);
-            }
+            // if (event.type == SDL_EVENT_MOUSE_MOTION)
+            // {
+            //     // auto& mouse_move = event.motion;
+            //     // float dx = mouse_move.xrel;
+            //     // float dy = mouse_move.yrel;
+            //     // 
+            // }
             // Additional event handling can go here (e.g., input, window events)
         }
 
-         // Get the current key state
-        const bool* key_state = SDL_GetKeyboardState(NULL);
+        // handle keyboard input.
+        {
+            const bool* key_state = SDL_GetKeyboardState(NULL);
+            // Handle continuous key press movement
+            bool move_forward = key_state[SDL_SCANCODE_W];
+            bool move_backward = key_state[SDL_SCANCODE_S];
+            bool move_left = key_state[SDL_SCANCODE_A];
+            bool move_right = key_state[SDL_SCANCODE_D];
+            camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
+        }
 
-        // Handle continuous key press movement
-        bool move_forward = key_state[SDL_SCANCODE_W];
-        bool move_backward = key_state[SDL_SCANCODE_S];
-        bool move_left = key_state[SDL_SCANCODE_A];
-        bool move_right = key_state[SDL_SCANCODE_D];
-        camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
-
+        // handle mouse input. this still seems jerky and is sometimes degenerate, where it locks the y axis. I don't understand why.
+        {
+            uint32_t mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+            int dx = mouse_x - last_mouse_x;
+            int dy = mouse_y - last_mouse_y;
+            camera = look_around(camera, dx, dy, mouse_sensitivity);
+        }
 
         // rendering code goes here.
         glClearColor(0.0f,0.2f,0.0f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
         draw_AABBS(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, shader_program,
-            glm::perspective(glm::radians(60.0f), (float)window_width / (float)window_height, 0.1f, 500.0f),
+            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+            get_view_matrix(camera)
+            );
+
+        draw_grid(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_view_matrix(camera)
             );
 
 
 
-        // Present the current buffer to the screen
         SDL_GL_SwapWindow(window);
 
         // SDL_Delay(100); 

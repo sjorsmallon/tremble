@@ -1,5 +1,11 @@
 #pragma once
 #include <format>
+#include <cmath>
+
+
+#include <glm/glm.hpp>  // For GLM vector types and functions
+#include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
+
 
 struct vec4
 {
@@ -50,6 +56,21 @@ struct vec3
         };
     };
 };
+
+static_assert(sizeof(vec3) == sizeof(glm::vec3));
+
+inline vec3 normalize(vec3 v)
+{
+    float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+
+    vec3 result = v;
+    result.x /= length;
+    result.y /= length;
+    result.z /= length;
+
+    return result;
+}
+
 
 // Define formatter specialization for vec3 (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)
 template <>

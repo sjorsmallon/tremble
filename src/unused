@@ -100,3 +100,33 @@ static bool connect_to_server()
         base_fragment_shader_src
         );
 
+
+// random glsl snippets.
+randomize_color_for_each_face
+{
+    
+  float random_from_seed(int seed)
+   {
+        // A simple hash function using bitwise operations and multiplication
+        seed = (seed ^ 61) ^ (seed >> 16);   
+        seed = seed + (seed << 3);           
+        seed = seed ^ (seed >> 4);           
+        seed = seed * 0x27d4eb2d;            
+        seed = seed ^ (seed >> 15);          
+
+        return float(seed & 0xFFFFFF) / 0xFFFFFF; // Normalize to [0, 1]
+    }
+
+    // Function to get a random color based on an integer seed
+    vec3 random_color_from_seed(int seed) {
+        float r = random_from_seed(seed);     // Random red component
+        float g = random_from_seed(seed + 1); // Random green component
+        float b = random_from_seed(seed + 2); // Random blue component
+
+        return vec3(r, g, b);                  // Return the RGB color as a vec3
+    }
+
+    // awful trick to perform integer division to get vertices to agree on a color.
+    int face_id = gl_VertexID / 3;
+    color_frag_in = vec4(random_color_from_seed(face_id), 1.0f);
+}

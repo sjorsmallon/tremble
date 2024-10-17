@@ -120,14 +120,14 @@ inline std::vector<vertex_xnc> to_vertex_xnc(AABB& aabb)
     // };
 
     // Define the colors for each face (RGB)
-    vec3 front_color {1.0f, 0.0f, 0.0f};  // Red
-    vec3 back_color  {0.0f, 1.0f, 0.0f};  // Green
-    vec3 bottom_color{0.0f, 0.0f, 1.0f};  // Blue
-    vec3 top_color   {1.0f, 1.0f, 0.0f};  // Yellow
-    vec3 left_color  {1.0f, 0.0f, 1.0f};  // Magenta
-    vec3 right_color {0.0f, 1.0f, 1.0f};  // Cyan
+    // vec3 front_color {1.0f, 0.0f, 0.0f};  // Red
+    // vec3 back_color  {0.0f, 1.0f, 0.0f};  // Green
+    // vec3 bottom_color{0.0f, 0.0f, 1.0f};  // Blue
+    // vec3 top_color   {1.0f, 1.0f, 0.0f};  // Yellow
+    // vec3 left_color  {1.0f, 0.0f, 1.0f};  // Magenta
+    // vec3 right_color {0.0f, 1.0f, 1.0f};  // Cyan
 
-    // Assign the color to each face's vertices by index
+    // Assign the color to each face's vertices by index. colors are hardcoded like this vbecause the compiler was complaining.
     auto all_vertices = std::vector<vertex_xnc>{
     // Front face 
     vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal, .color =  {0.8f, 0.0f, 0.0f}},

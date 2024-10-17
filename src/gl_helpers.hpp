@@ -2,6 +2,11 @@
 #include <glad/glad.h>
 #include <vector>
 
+#include <glm/glm.hpp>  // For GLM vector types and functions
+#include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
+
+#include "vec.hpp"
+
 // openGL error callback
 void GLAPIENTRY opengl_message_callback(
     GLenum source,
@@ -53,7 +58,7 @@ inline void set_global_gl_settings()
         glEnable(GL_DEPTH_TEST); // default is GL_LESS
 
         // Line width
-        glLineWidth(1.0);
+        glLineWidth(2.0);
         glEnable(GL_LINE_SMOOTH);
 
         // enable debug output
@@ -77,6 +82,90 @@ struct GL_Buffer
 // in the future. maybe.
 
 #include "../src/vertex.hpp"
+
+// grid generation. maybe this should be in "grid.hpp".
+std::vector<vec3> generate_grid_lines_from_plane(vec3 position, vec3 plane_normal, float grid_size, float grid_spacing)
+{
+    std::vector<vec3> lines{};
+    glm::vec3 grid_center = glm::vec3(position.x, position.y, position.z);
+    vec3 normal = normalize(plane_normal);  // Ensure normal is unit length
+
+    // Find two perpendicular vectors to the normal to define the grid's axes
+    glm::vec3 u_axis{};
+    glm::vec3 v_axis{};
+    if (abs(normal.z) < 0.999)
+    {
+        u_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), glm::vec3(0.0f, 0.0f, 1.0f))); // Cross with Z-axis
+    } else
+    {
+        u_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), glm::vec3(1.0f, 0.0f, 0.0f))); // Special case for Z normal
+    }
+    v_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), u_axis));  // v-axis is orthogonal to u_axis and normal
+
+    // Define the grid size and spacing
+    for (float i = -grid_size; i <= grid_size; i += grid_spacing)
+    {
+        glm::vec3 start = grid_center + i * v_axis - grid_size * u_axis;
+        glm::vec3 end   = grid_center + i * v_axis + grid_size * u_axis;
+
+        lines.push_back(vec3{start.x, start.y, start.z});
+        lines.push_back(vec3{end.x, end.y, end.z});
+    }
+
+    // Draw lines along the 'v' axis
+    for (float i = -grid_size; i <= grid_size; i += grid_spacing)
+    {
+        glm::vec3 start = grid_center + i * u_axis - grid_size * v_axis;
+        glm::vec3 end   = grid_center + i * u_axis + grid_size * v_axis;
+        // Render this line (from start to end)
+      
+        lines.push_back(vec3{start.x, start.y, start.z});
+        lines.push_back(vec3{end.x, end.y, end.z});
+    }
+
+    return lines;
+}
+
+// for line drawing. I guess.
+GL_Buffer create_x_buffer(const std::vector<vec3>& values)
+{
+    GL_Buffer gl_buffer{};
+
+    // Generate and bind VAO and VBO
+    glGenVertexArrays(1, &gl_buffer.VAO); 
+    glGenBuffers(1, &gl_buffer.VBO);
+    glBindVertexArray(gl_buffer.VAO);
+
+    // Fill the buffer with vertex data (position only)
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vertex_xnc), values.data(), GL_STATIC_DRAW);
+
+    // Attribute IDs and layout for position
+    const int32_t position_attribute_id = 0;
+    const int32_t position_float_count = 3;
+    const int32_t position_byte_offset = 0;
+    const int32_t vertex_byte_stride = position_float_count * sizeof(float);
+
+    // Set the vertex count
+    gl_buffer.vertex_count = values.size();
+
+    // Enable and specify the position attribute (vec3)
+    glEnableVertexAttribArray(position_attribute_id);
+    glVertexAttribPointer(
+        position_attribute_id,
+        position_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)position_byte_offset
+    );
+
+    // Unbind the buffer and VAO
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return gl_buffer;
+}
 
 GL_Buffer create_interleaved_xnc_buffer(const std::vector<vertex_xnc>& interleaved_xnc_values)
 {
