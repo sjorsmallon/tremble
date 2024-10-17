@@ -65,3 +65,38 @@ static bool connect_to_server()
 {
     return false;
 }
+
+
+
+
+
+    auto default_triangle_vertices = create_default_triangle();
+    auto default_triangle_buffer = create_interleaved_xnc_buffer(default_triangle_vertices);
+
+    const char* base_vertex_shader_src = R"(
+               #version 330 core
+        layout(location = 0) in vec3 aPos;     // Vertex position
+        layout(location = 1) in vec3 aNormal;  // Vertex normal (not used in this simple shader)
+        layout(location = 2) in vec4 aColor;    // Vertex color
+
+        out vec4 FragColor; // Output color to fragment shader
+
+        void main() {
+            gl_Position = vec4(aPos, 1.0); // Transform to clip space
+            FragColor = aColor;             // Pass color to fragment shader
+        })";
+
+    const char* base_fragment_shader_src = R"(
+        #version 330 core
+        in vec4 FragColor; // Input color from vertex shader
+        out vec4 finalColor; // Final color output
+
+        void main() {
+            finalColor = FragColor; // Set the output color
+    })";
+
+    auto base_shader_program = create_shader_program(
+        base_vertex_shader_src,
+        base_fragment_shader_src
+        );
+

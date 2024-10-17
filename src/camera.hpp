@@ -5,7 +5,7 @@ struct Camera
 {
     glm::vec3 position{0.0f,0.0f, -3.0f};
     glm::vec3 front{0.0f,0.0f, -1.0f};
-    glm::vec3 up{0.0f, 1.0f, 0.0f}
+    glm::vec3 up{0.0f, 1.0f, 0.0f};
     float yaw{-90.f};
     float pitch{0.f};
 };
@@ -18,25 +18,28 @@ inline Camera update_camera(
 	bool w_pressed,
 	bool a_pressed,
 	bool s_pressed,
-	bool d_pressed)
+	bool d_pressed,
+    float move_speed)
 {
 	Camera camera = old_camera;
 
-    float velocity = MOVE_SPEED * dt;
+    float velocity = move_speed * dt;
 
     if (w_pressed) camera.position += camera.front * velocity;  // Move forward
-    if (a_pressed) camera.position -= camera.front * velocity;  // Move backward
-    if (s_pressed) camera.position -= glm::normalize(glm::cross(camera.front, camera.up)) * velocity;  // Move left
+    if (s_pressed) camera.position -= camera.front * velocity;  // Move backward
+    if (a_pressed) camera.position -= glm::normalize(glm::cross(camera.front, camera.up)) * velocity;  // Move left
     if (d_pressed) camera.position += glm::normalize(glm::cross(camera.front, camera.up)) * velocity;  // Move right
+
+    return camera;
 }
 
 //@Memory: why not update in place?
-inline Camera look_around(const Camera& old_camera, float x_offset, float y_offset)
+inline Camera look_around(const Camera& old_camera, float x_offset, float y_offset, float mouse_sensitivity)
 {
 	Camera camera = old_camera;
 
-    x_offset *= MOUSE_SENSITIVITY;
-    y_offset *= MOUSE_SENSITIVITY;
+    x_offset *= mouse_sensitivity;
+    y_offset *= mouse_sensitivity;
 
     camera.yaw += x_offset;
     camera.pitch -= y_offset;
@@ -50,6 +53,8 @@ inline Camera look_around(const Camera& old_camera, float x_offset, float y_offs
     front.y = sin(glm::radians(camera.pitch));
     front.z = sin(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
     camera.front = glm::normalize(front);
+
+    return camera;
 }
 
 // Get view matrix from the camera

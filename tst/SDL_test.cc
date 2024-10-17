@@ -12,7 +12,7 @@
 #include "../src/input.hpp"
 #include "../src/gl_helpers.hpp"
 #include "../src/AABB.hpp"
-
+#include "../src/camera.hpp"
 
 // this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
 static Key to_key(const SDL_Event& event)
@@ -41,6 +41,7 @@ static Mouse to_mouse(const SDL_Event& event)
     return Mouse::MOUSE_PLACEHOLDER;
 }
 
+// this needs access to camera.
 void handle_keyboard_input(Key key)
 {
     switch (key)
@@ -58,22 +59,52 @@ void handle_keyboard_input(Key key)
             break;
         }
 
+        // case Key::KEY_W:
+        // {
+        //     break;    
+        // }
+
+
+        // case Key::KEY_A:
+        // {
+        //     break;    
+        // }
+
+
+        // case Key::KEY_S:
+        // {
+        //     break;    
+        // }
+
+
+        // case Key::KEY_D:
+        // {
+        //     break;    
+        // }
+
         default:
         {
-            std::print("unreachable.\n");
+            // std::print("unreachable.\n");
             break;            
         }
     }
 }
 
-static void draw_AABBS(const uint32_t VAO, const uint32_t VBO, const size_t vertex_count, const uint32_t shader_program)
+static void draw_AABBS(
+    const uint32_t VAO,
+    const uint32_t VBO,
+    const size_t vertex_count,
+    const uint32_t shader_program,
+    const glm::mat4& projection,
+    const glm::mat4& view
+    )
 {
     //@Hardcode: fov, window_width, window_height.
     int width = 1920;
     int height = 1080;
 
-    glm::mat4 projection = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 200.0f);
-    glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f)); // Move the camera back 3 units
+    // glm::mat4 projection = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 200.0f);
+    // glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f)); // Move the camera back 3 units
     glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
  
     glUseProgram(shader_program);
@@ -90,15 +121,16 @@ static void draw_AABBS(const uint32_t VAO, const uint32_t VBO, const size_t vert
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
-
-	static SDL_Window* window = nullptr;
+    int window_width = 1920;
+    int window_height = 1080;
+	SDL_Window* window = nullptr;
     SDL_GLContext gl_context{};
     {
         SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
 
         // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
         window = SDL_CreateWindow(
-            "SDL3/OpenGL Demo", 1920, 1080, 
+            "SDL3/OpenGL Demo", window_width, window_height, 
             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
       
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
@@ -118,7 +150,7 @@ int main(int argc, char *argv[])
 
 
     // drawing related stuff.
-    auto path = std::string{"data/list_of_AABB"};
+    auto path = std::string{"../data/list_of_AABB"};
     auto aabbs = read_AABBs_from_file(path);
     auto vertices  = to_vertex_xnc(aabbs);
     auto aabb_gl_buffer = create_interleaved_xnc_buffer(vertices);
@@ -157,49 +189,33 @@ int main(int argc, char *argv[])
         void main() {
             color_frag_out = color_frag_in;
     })";
+
     auto shader_program = create_shader_program(
         vertex_shader_src,
         fragment_shader_src
     );
 
-    auto default_triangle_vertices = create_default_triangle();
-    auto default_triangle_buffer = create_interleaved_xnc_buffer(default_triangle_vertices);
-
-    const char* base_vertex_shader_src = R"(
-               #version 330 core
-        layout(location = 0) in vec3 aPos;     // Vertex position
-        layout(location = 1) in vec3 aNormal;  // Vertex normal (not used in this simple shader)
-        layout(location = 2) in vec4 aColor;    // Vertex color
-
-        out vec4 FragColor; // Output color to fragment shader
-
-        void main() {
-            gl_Position = vec4(aPos, 1.0); // Transform to clip space
-            FragColor = aColor;             // Pass color to fragment shader
-        })";
-
-    const char* base_fragment_shader_src = R"(
-        #version 330 core
-        in vec4 FragColor; // Input color from vertex shader
-        out vec4 finalColor; // Final color output
-
-        void main() {
-            finalColor = FragColor; // Set the output color
-    })";
-
-    auto base_shader_program = create_shader_program(
-        base_vertex_shader_src,
-        base_fragment_shader_src
-        );
-
     bool running = true;
     SDL_Event event;
+
+    // game state.
+    auto camera = Camera{};    
+    float move_speed = 10.0f;
+    float mouse_sensitivity = 2.0f;
+    float dt = 0.f;
+    float now = SDL_GetPerformanceCounter();
+    float last = 0.f;
+
     while (running)
     {
+         last = now;
+         now = SDL_GetPerformanceCounter();
+         dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
+
         // Process events
         while (SDL_PollEvent(&event))
         {
-
+            //Note: this is _not_good_enough_ to deal with repeated keystrokes. we need to poll the keyboard state every frame. 
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
                 auto key = to_key(event);
@@ -210,19 +226,47 @@ int main(int argc, char *argv[])
             {
                 running = false;
             }
+
+            if (event.type == SDL_EVENT_MOUSE_MOTION)
+            {
+                auto& mouse_move = event.motion;
+                float dx = mouse_move.xrel;
+                float dy = mouse_move.yrel;
+
+                camera = look_around(camera, dx, dy, mouse_sensitivity);
+            }
             // Additional event handling can go here (e.g., input, window events)
         }
 
+         // Get the current key state
+        const bool* key_state = SDL_GetKeyboardState(NULL);
+
+        // Handle continuous key press movement
+        bool move_forward = key_state[SDL_SCANCODE_W];
+        bool move_backward = key_state[SDL_SCANCODE_S];
+        bool move_left = key_state[SDL_SCANCODE_A];
+        bool move_right = key_state[SDL_SCANCODE_D];
+
+        // Update camera based on the key state
+        camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
+
+
+
+        // rendering code goes here.
         glClearColor(0.0f,0.2f,0.0f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
-        // rendering code goes here.
-        draw_AABBS(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, shader_program);
+        draw_AABBS(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, shader_program,
+            glm::perspective(glm::radians(60.0f), (float)window_width / (float)window_height, 0.1f, 500.0f),
+            get_view_matrix(camera)
+            );
+
+
 
         // Present the current buffer to the screen
         SDL_GL_SwapWindow(window);
 
-        SDL_Delay(100); 
+        // SDL_Delay(100); 
 
     }
 
