@@ -128,6 +128,9 @@ int main(int argc, char *argv[])
     {
         SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
 
+        // Enable relative mouse mode and capture the mouse
+        SDL_CaptureMouse(true);
+
         // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
         window = SDL_CreateWindow(
             "SDL3/OpenGL Demo", window_width, window_height, 
@@ -165,6 +168,7 @@ int main(int argc, char *argv[])
         layout(location = 0) out vec3 position_frag_in;
         layout(location = 1) out vec3 normal_frag_in;
         layout(location = 2) out vec4 color_frag_in;
+        layout(location = 3) out vec3 barycentric;
         
         uniform mat4 model; // Model matrix
         uniform mat4 view;  // View matrix
@@ -172,10 +176,19 @@ int main(int argc, char *argv[])
 
         void main()
         {
-            position_frag_in = vec3(model * vec4(position_vert_in, 1.0)); // Transform the vertex position to world space
+            // Assigning barycentric coordinates to the vertices
+            if (gl_VertexID % 3 == 0)
+                barycentric = vec3(1.0, 0.0, 0.0); // First vertex
+            else if (gl_VertexID % 3 == 1)
+                barycentric = vec3(0.0, 1.0, 0.0); // Second vertex
+            else // if (gl_VertexID % 3 == 2)
+                barycentric = vec3(0.0, 0.0, 1.0); // Third vertex
+
+
             normal_frag_in = mat3(transpose(inverse(model))) * normal_vert_in; // Transform the normal to world space
-            gl_Position = projection * view * vec4(position_frag_in, 1.0); // Apply projection and view transformations
             color_frag_in = color_vert_in; // Pass vertex color to fragment shader
+            position_frag_in = vec3(model * vec4(position_vert_in, 1.0)); // Transform the vertex position to world space
+            gl_Position = projection * view * vec4(position_frag_in, 1.0); // Apply projection and view transformations
         })";
 
     const char* fragment_shader_src = R"(
@@ -183,11 +196,39 @@ int main(int argc, char *argv[])
         layout(location = 0) in vec3 position_frag_in;
         layout(location = 1) in vec3 normal_frag_in;
         layout(location = 2) in vec4 color_frag_in;
+        layout(location = 3) in vec3 barycentric;
 
         layout(location = 0) out vec4 color_frag_out;
 
-        void main() {
-            color_frag_out = color_frag_in;
+        float brightness_based_on_barycentric_coordinates(vec3 barycentric_coordinates)
+        {
+            // barycentric coordinates: if one of them is close to zero, that means we are near the "opposite"edge.
+            float edge_factor = min(min(barycentric.x, barycentric.y), barycentric.z);
+                
+            float threshold = 0.05f;  // Adjust this value to control how dark the edges get
+
+            // Create a brightness factor based on the edge proximity
+            float brightness_factor;
+
+            if (edge_factor < threshold)
+            {
+                // Darken the color based on proximity to the edge
+                // Closer to the edge will have more influence on darkening
+                // pick a value between 1.0 and 0.5, based on this value between 0.1).
+                brightness_factor = mix(1.0, 0.5, (threshold - edge_factor) / threshold);
+            } else {
+                // Center is bright
+                brightness_factor = 1.0;
+            }
+
+            return brightness_factor;
+        }
+
+        void main()
+        {
+            float brightness = brightness_based_on_barycentric_coordinates(barycentric);
+            vec4 resulting_color = vec4(color_frag_in.xyz * brightness, 1.0);
+            color_frag_out = resulting_color;
     })";
 
     auto shader_program = create_shader_program(
@@ -215,7 +256,7 @@ int main(int argc, char *argv[])
         // Process events
         while (SDL_PollEvent(&event))
         {
-            //Note: this is _not_good_enough_ to deal with repeated keystrokes. we need to poll the keyboard state every frame. 
+            //Note: this is _not good enough_ to deal with repeated keystrokes. we need to poll the keyboard state every frame. 
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
                 auto key = to_key(event);
@@ -246,10 +287,7 @@ int main(int argc, char *argv[])
         bool move_backward = key_state[SDL_SCANCODE_S];
         bool move_left = key_state[SDL_SCANCODE_A];
         bool move_right = key_state[SDL_SCANCODE_D];
-
-        // Update camera based on the key state
         camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
-
 
 
         // rendering code goes here.
