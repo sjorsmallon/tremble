@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
 #include <print>
@@ -99,11 +100,11 @@ static void draw_vertex_xnc_buffer(
     const size_t vertex_count,
     const uint32_t shader_program,
     const glm::mat4& projection,
-    const glm::mat4& view
+    const glm::mat4& view,
+    const glm::mat4& model
     )
 {
-    glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
- 
+
     glUseProgram(shader_program);
     set_uniform(shader_program, "model", model);
     set_uniform(shader_program, "view", view);
@@ -113,7 +114,7 @@ static void draw_vertex_xnc_buffer(
     glDrawArrays(GL_TRIANGLES, 0, vertex_count);
 }
 
-static void draw_grid(
+static void draw_lines_vertex_x_buffer(
     const uint32_t VAO,
     const uint32_t VBO,
     const size_t vertex_count,
@@ -132,6 +133,8 @@ static void draw_grid(
     glBindVertexArray(VAO);
     glDrawArrays(GL_LINES, 0, vertex_count);
 }
+
+
 
 
 uint32_t create_x_shader_program()
@@ -244,7 +247,6 @@ uint32_t create_interleaved_xnc_shader_program()
             color_frag_out = resulting_color;
     })";
 
-
     auto shader_program = create_shader_program(
         vertex_shader_src,
         fragment_shader_src
@@ -306,6 +308,16 @@ int main(int argc, char *argv[])
 
     auto arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 10.0f}, {100.0f, 0.0f, 10.0f}, 10.0f);
     auto arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+
+    auto x_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1.0f);
+    auto x_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+
+    auto y_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.f, 0.0f}, {0.0f, 1.0f, 0.0f}, 1.0f);
+    auto y_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+
+    auto z_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, 10.0f);
+    auto z_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+    
 
     bool running = true;
     SDL_Event event;
@@ -388,18 +400,43 @@ int main(int argc, char *argv[])
         glClearColor(0.0f,0.2f,0.0f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
+        // aabbs.
         draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_view_matrix(camera)
+            get_view_matrix(camera),
+            glm::mat4(1.0f)
             );
 
+        // just the one arrow 
         draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_view_matrix(camera)
+            get_view_matrix(camera),
+            glm::mat4(1.0f)
             );
 
+        // the three arrows.
+        // think about glm::ortho.
+        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
+            glm::ortho(0.0f, (float)window_width,(float) window_height, 0.0f, near_z, far_z),
+            get_view_matrix(camera),
+            glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 100, 0)) // X arrow
+        );
+        
+        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
+        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        get_view_matrix(camera),
+        glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 200, 0))
+        );
+        
+        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
+        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        get_view_matrix(camera),
+        glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 300, 0))
+        );
 
-        draw_grid(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+
+
+        draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_view_matrix(camera)
             );
