@@ -13,6 +13,7 @@
 #include "../src/gl_helpers.hpp"
 #include "../src/AABB.hpp"
 #include "../src/camera.hpp"
+#include "../src/debug_draw.hpp"
 
 // this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
 static Key to_key(const SDL_Event& event)
@@ -23,6 +24,7 @@ static Key to_key(const SDL_Event& event)
         {SDLK_A ,Key::KEY_A},
         {SDLK_S,Key::KEY_S},
         {SDLK_D,Key::KEY_D},
+        {SDLK_P,Key::KEY_P},
     };
 
     for (auto& [key, value]: mapping)
@@ -91,7 +93,7 @@ void handle_keyboard_input(Key key)
 }
 
 // there is a better abstraction here that will come later.
-static void draw_AABBS(
+static void draw_vertex_xnc_buffer(
     const uint32_t VAO,
     const uint32_t VBO,
     const size_t vertex_count,
@@ -292,7 +294,7 @@ int main(int argc, char *argv[])
     auto vertices  = to_vertex_xnc(aabbs);
     auto aabb_gl_buffer = create_interleaved_xnc_buffer(vertices);
 
-    uint32_t shader_program = create_interleaved_xnc_shader_program();
+    uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
     uint32_t x_shader_program = create_x_shader_program();
 
     float grid_size = 1000.0f;
@@ -301,6 +303,9 @@ int main(int argc, char *argv[])
     // to be interpreted as (start, end).
     auto grid_vertices = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
     auto grid_gl_buffer=  create_x_buffer(grid_vertices);
+
+    auto arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 10.0f}, {100.0f, 0.0f, 10.0f}, 10.0f);
+    auto arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
 
     bool running = true;
     SDL_Event event;
@@ -320,8 +325,6 @@ int main(int argc, char *argv[])
     float last_mouse_x;
     float last_mouse_y;
 
-
-
     while (running)
     {
          last = now;
@@ -339,6 +342,12 @@ int main(int argc, char *argv[])
             {
                 auto key = to_key(event);
                 handle_keyboard_input(key);
+
+                // temporary debug stuff.
+                if (key == Key::KEY_P)
+                {
+                    std::print("{}",camera.position);
+                }
             }
 
             if (event.type == SDL_EVENT_QUIT)
@@ -379,21 +388,23 @@ int main(int argc, char *argv[])
         glClearColor(0.0f,0.2f,0.0f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
-        draw_AABBS(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, shader_program,
+        draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_view_matrix(camera)
             );
+
+        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
+            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+            get_view_matrix(camera)
+            );
+
 
         draw_grid(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_view_matrix(camera)
             );
 
-
-
         SDL_GL_SwapWindow(window);
-
-        // SDL_Delay(100); 
 
     }
 

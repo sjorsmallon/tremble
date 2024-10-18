@@ -3,8 +3,21 @@
 #include <cmath>
 
 
-#include <glm/glm.hpp>  // For GLM vector types and functions
-#include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
+#include <glm/glm.hpp>  
+#include <glm/gtc/type_ptr.hpp>  // 
+
+// Define formatter specialization for glm::vec3 (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)
+template <>
+struct std::formatter<glm::vec3> : std::formatter<std::string> {
+    // Format the vec3 as a string
+    auto format(const glm::vec3& v, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "({}, {}, {})", v.x, v.y, v.z);
+    }
+};
+
+
+
+
 
 
 struct vec4
@@ -55,9 +68,48 @@ struct vec3
         	float data[3];
         };
     };
+
+
+    vec3 operator+(const vec3& other) const
+    {
+        return vec3{x + other.x, y + other.y, z + other.z};
+    }
+
+    vec3 operator-(const vec3& other) const
+    {
+        return vec3{x - other.x, y - other.y, z - other.z};
+    }
+
+    vec3& operator+=(const vec3& other)
+    {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        return *this;
+    }
+
+    // vec3 * float
+    vec3 operator*(float scalar) const
+    {
+        return vec3{x * scalar, y * scalar, z * scalar};
+    }
+
+    // float * vec3 ("friend")
+    friend vec3 operator*(float scalar, const vec3& v)
+    {
+        return vec3{v.x * scalar, v.y * scalar, v.z * scalar};
+    }
+
 };
 
-static_assert(sizeof(vec3) == sizeof(glm::vec3));
+// negate
+vec3 operator-(const vec3& v)
+{
+    return vec3{-v.x, -v.y, -v.z};
+}
+
+
+
 
 inline vec3 normalize(vec3 v)
 {
@@ -70,6 +122,30 @@ inline vec3 normalize(vec3 v)
 
     return result;
 }
+
+inline float length(const vec3& v)
+{
+    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+inline vec3 cross(const vec3& v1, const vec3& v2)
+{
+    return vec3{
+        v1.y * v2.z - v1.z * v2.y,  // x component
+        v1.z * v2.x - v1.x * v2.z,  // y component
+        v1.x * v2.y - v1.y * v2.x   // z component
+    };
+}
+
+// Free function: Dot product of two vectors
+inline float dot(const vec3& v1, const vec3& v2)
+{
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+}
+
+// safeguard for some typecasting
+static_assert(sizeof(vec3) == sizeof(glm::vec3));
+
 
 
 // Define formatter specialization for vec3 (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)

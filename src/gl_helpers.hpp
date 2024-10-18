@@ -2,9 +2,8 @@
 #include <glad/glad.h>
 #include <vector>
 
-#include <glm/glm.hpp>  // For GLM vector types and functions
-#include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
 
+#include "../src/vertex.hpp"
 #include "vec.hpp"
 
 // openGL error callback
@@ -81,52 +80,7 @@ struct GL_Buffer
 // FIXME: actually, I like that we had a vector of float instead of vector of xnc. can we still fix this?
 // in the future. maybe.
 
-#include "../src/vertex.hpp"
 
-// grid generation. maybe this should be in "grid.hpp".
-std::vector<vec3> generate_grid_lines_from_plane(vec3 position, vec3 plane_normal, float grid_size, float grid_spacing)
-{
-    std::vector<vec3> lines{};
-    glm::vec3 grid_center = glm::vec3(position.x, position.y, position.z);
-    vec3 normal = normalize(plane_normal);  // Ensure normal is unit length
-
-    // Find two perpendicular vectors to the normal to define the grid's axes
-    glm::vec3 u_axis{};
-    glm::vec3 v_axis{};
-    if (abs(normal.z) < 0.999)
-    {
-        u_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), glm::vec3(0.0f, 0.0f, 1.0f))); // Cross with Z-axis
-    } else
-    {
-        u_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), glm::vec3(1.0f, 0.0f, 0.0f))); // Special case for Z normal
-    }
-    v_axis = glm::normalize(glm::cross(glm::vec3(normal.x, normal.y, normal.z), u_axis));  // v-axis is orthogonal to u_axis and normal
-
-    // Define the grid size and spacing
-    for (float i = -grid_size; i <= grid_size; i += grid_spacing)
-    {
-        glm::vec3 start = grid_center + i * v_axis - grid_size * u_axis;
-        glm::vec3 end   = grid_center + i * v_axis + grid_size * u_axis;
-
-        lines.push_back(vec3{start.x, start.y, start.z});
-        lines.push_back(vec3{end.x, end.y, end.z});
-    }
-
-    // Draw lines along the 'v' axis
-    for (float i = -grid_size; i <= grid_size; i += grid_spacing)
-    {
-        glm::vec3 start = grid_center + i * u_axis - grid_size * v_axis;
-        glm::vec3 end   = grid_center + i * u_axis + grid_size * v_axis;
-        // Render this line (from start to end)
-      
-        lines.push_back(vec3{start.x, start.y, start.z});
-        lines.push_back(vec3{end.x, end.y, end.z});
-    }
-
-    return lines;
-}
-
-// for line drawing. I guess.
 GL_Buffer create_x_buffer(const std::vector<vec3>& values)
 {
     GL_Buffer gl_buffer{};
@@ -264,7 +218,6 @@ std::vector<vertex_xnc> create_default_triangle()
     return triangle;
 }
 
-
 // Shader stuff.
 bool check_program_link_status(GLuint program) 
 {
@@ -273,9 +226,9 @@ bool check_program_link_status(GLuint program)
 
     if (!success) 
     {
-        char infoLog[512]; 
-        glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog); 
-        std::print("ERROR::PROGRAM::LINKING_FAILED\n{}\n", infoLog); 
+        char info_log[512]; 
+        glGetProgramInfoLog(program, sizeof(info_log), nullptr, info_log); 
+        std::print("ERROR::PROGRAM::LINKING_FAILED\n{}\n", info_log); 
         return false; 
     }
     
@@ -289,9 +242,9 @@ bool check_shader_compile_status(GLuint shader)
     
     if (!success)
     { 
-        char infoLog[512]; 
-        glGetShaderInfoLog(shader, sizeof(infoLog), nullptr, infoLog);
-        std::print("ERROR::SHADER::COMPILATION_FAILED. openGL error {}\n",infoLog); 
+        char info_log[512]; 
+        glGetShaderInfoLog(shader, sizeof(info_log), nullptr, info_log);
+        std::print("ERROR::SHADER::COMPILATION_FAILED. openGL error {}\n",info_log); 
         return false;
     }
     
@@ -355,6 +308,8 @@ uint32_t create_shader_program(
 // we are inconsistent here with vec3/vec4 and glm::mat4. we should probably consolidate at some point.
 // I dislike how glm seeps into every inch of your program.
 #include <glm/gtc/type_ptr.hpp> 
+#include <glm/glm.hpp>  // For GLM vector types and functions
+#include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
 
 template <typename Type>
 inline void set_uniform(GLuint program_id, const std::string_view name, const Type& value)

@@ -8,6 +8,7 @@ enum class Key
 	KEY_A,
 	KEY_S,
 	KEY_D,
+	KEY_P,
 	KEY_SPACE,
 };
 
