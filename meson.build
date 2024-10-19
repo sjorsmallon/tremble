@@ -1,6 +1,9 @@
 project('test_project', 'cpp', 
   default_options : ['cpp_std=c++23', 'buildtype=debug'])
 
+# this is to deal with it complaining about my union initialization.
+add_project_arguments('-Wno-missing-braces', language: 'cpp')
+
 # Set up include directories
 inc_dir = include_directories('inc')
 
@@ -41,7 +44,7 @@ executable('sdl_test',
   ['tst/SDL_test.cc', 'src/glad.cpp'],
   include_directories : inc_dir,
   dependencies : [sdl3_lib],
-  link_args : ['-Wl,/SUBSYSTEM:CONSOLE'],
+  link_args : ['-Wl,/SUBSYSTEM:CONSOLE', '-Wno-missing-braces'],
   install : false
 )
 

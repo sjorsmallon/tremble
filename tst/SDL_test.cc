@@ -285,6 +285,9 @@ int main(int argc, char *argv[])
 
         // huh. even though I did not do this, it seems to not help.
         SDL_GL_MakeCurrent(window, gl_context);
+
+        // disable vsync
+        SDL_GL_SetSwapInterval(0);
     }
     
     set_global_gl_settings();
@@ -324,19 +327,20 @@ int main(int argc, char *argv[])
 
     // game state.
     auto camera = Camera{};    
-    float move_speed = 10.0f;
+    float move_speed = 100.0f;
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
     float near_z = 0.1f;
     float far_z = 500.f;
     float dt = 0.f;
-    float now = SDL_GetPerformanceCounter();
-    float last = 0.f;
+    double now = SDL_GetPerformanceCounter();
+    double last = 0.f;
     float mouse_x;
     float mouse_y;
     float last_mouse_x;
     float last_mouse_y;
 
+    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works".
     while (running)
     {
          last = now;
@@ -350,22 +354,22 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event))
         {
             //Note: this is _not good enough_ to deal with repeated keystrokes. we need to poll the keyboard state every frame. 
-            if (event.type == SDL_EVENT_KEY_DOWN)
-            {
-                auto key = to_key(event);
-                handle_keyboard_input(key);
+            // if (event.type == SDL_EVENT_KEY_DOWN)
+            // {
+            //     auto key = to_key(event);
+            //     handle_keyboard_input(key);
 
-                // temporary debug stuff.
-                if (key == Key::KEY_P)
-                {
-                    std::print("{}",camera.position);
-                }
-            }
+            //     // temporary debug stuff.
+            //     if (key == Key::KEY_P)
+            //     {
+            //         std::print("{}",camera.position);
+            //     }
+            // }
 
-            if (event.type == SDL_EVENT_QUIT)
-            {
-                running = false;
-            }
+            // if (event.type == SDL_EVENT_QUIT)
+            // {
+            //     running = false;
+            // }
 
             // if (event.type == SDL_EVENT_MOUSE_MOTION)
             // {
@@ -377,6 +381,7 @@ int main(int argc, char *argv[])
             // Additional event handling can go here (e.g., input, window events)
         }
 
+
         // handle keyboard input.
         {
             const bool* key_state = SDL_GetKeyboardState(NULL);
@@ -386,6 +391,8 @@ int main(int argc, char *argv[])
             bool move_left = key_state[SDL_SCANCODE_A];
             bool move_right = key_state[SDL_SCANCODE_D];
             camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
+
+            if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
         }
 
         // handle mouse input. this still seems jerky and is sometimes degenerate, where it locks the y axis. I don't understand why.
@@ -433,8 +440,6 @@ int main(int argc, char *argv[])
         get_view_matrix(camera),
         glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 300, 0))
         );
-
-
 
         draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
