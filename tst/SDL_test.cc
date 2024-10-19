@@ -312,14 +312,14 @@ int main(int argc, char *argv[])
     auto arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 10.0f}, {100.0f, 0.0f, 10.0f}, 10.0f);
     auto arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
 
-    auto x_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1.0f);
-    auto x_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+    auto x_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.15f);
+    auto x_arrow_gl_buffer = create_interleaved_xnc_buffer(x_arrow_vertices);
 
-    auto y_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.f, 0.0f}, {0.0f, 1.0f, 0.0f}, 1.0f);
-    auto y_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+    auto y_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.15f);
+    auto y_arrow_gl_buffer = create_interleaved_xnc_buffer(y_arrow_vertices);
 
-    auto z_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, 10.0f);
-    auto z_arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
+    auto z_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, 0.15f);
+    auto z_arrow_gl_buffer = create_interleaved_xnc_buffer(z_arrow_vertices);
     
 
     bool running = true;
@@ -408,42 +408,57 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
         // aabbs.
-        draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
-            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_view_matrix(camera),
-            glm::mat4(1.0f)
-            );
+        // draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        //     get_look_at_view_matrix(camera),
+        //     glm::mat4(1.0f)
+        //     );
 
         // just the one arrow 
-        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
-            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_view_matrix(camera),
-            glm::mat4(1.0f)
-            );
+        // draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
+        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        //     get_look_at_view_matrix(camera),
+        //     glm::mat4(1.0f)
+        //     );
 
         // the three arrows.
         // think about glm::ortho.
-        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
-            glm::ortho(0.0f, (float)window_width,(float) window_height, 0.0f, near_z, far_z),
-            get_view_matrix(camera),
-            glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 100, 0)) // X arrow
+        // stop guessing.
+        glDisable(GL_DEPTH_TEST);
+
+
+        // think about it differently.
+        // projection is the same.
+        // the view is ok.
+        // the main thing is this: we need to translate it to the center of NDC. how do we do that?
+        // the translation is the translation in world space. I am confusing myself.
+
+        glm::mat4 translation = glm::mat4(1.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z);
+        glm::mat4 view = get_look_at_view_matrix(camera);
+
+        draw_vertex_xnc_buffer(x_arrow_gl_buffer.VAO, x_arrow_gl_buffer.VBO, x_arrow_gl_buffer.vertex_count, xnc_shader_program,
+            projection,
+            view,
+            translation
         );
         
-        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
-        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        get_view_matrix(camera),
-        glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 200, 0))
+        draw_vertex_xnc_buffer(y_arrow_gl_buffer.VAO, y_arrow_gl_buffer.VBO, y_arrow_gl_buffer.vertex_count, xnc_shader_program,
+        projection,
+        view,
+        translation
         );
         
-        draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
-        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        get_view_matrix(camera),
-        glm::translate(glm::mat4(1.0f), glm::vec3(window_width - 100, window_height - 300, 0))
+        draw_vertex_xnc_buffer(z_arrow_gl_buffer.VAO, z_arrow_gl_buffer.VBO, z_arrow_gl_buffer.vertex_count, xnc_shader_program,
+        projection,
+        view,
+        translation
         );
+        glEnable(GL_DEPTH_TEST);
 
         draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_view_matrix(camera)
+            get_look_at_view_matrix(camera)
             );
 
         SDL_GL_SwapWindow(window);

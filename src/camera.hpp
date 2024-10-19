@@ -58,7 +58,7 @@ inline Camera look_around(const Camera& old_camera, float x_offset, float y_offs
 }
 
 // Get view matrix from the camera
-inline glm::mat4 get_view_matrix(const Camera& camera)
+inline glm::mat4 get_look_at_view_matrix(const Camera& camera)
 {
     return glm::lookAt(camera.position, camera.position + camera.front, camera.up);
 }
