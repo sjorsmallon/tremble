@@ -433,9 +433,11 @@ int main(int argc, char *argv[])
         // the main thing is this: we need to translate it to the center of NDC. how do we do that?
         // the translation is the translation in world space. I am confusing myself.
 
-        glm::mat4 translation = glm::mat4(1.0f);
         glm::mat4 projection = glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z);
         glm::mat4 view = get_look_at_view_matrix(camera);
+        auto right = normalize(cross(camera.front, camera.up));
+        glm::mat4 translation = glm::translate(glm::mat4(1.0f), camera.position + 2.0f * normalize(camera.front) + 1.0f * normalize(right));
+
 
         draw_vertex_xnc_buffer(x_arrow_gl_buffer.VAO, x_arrow_gl_buffer.VBO, x_arrow_gl_buffer.vertex_count, xnc_shader_program,
             projection,
