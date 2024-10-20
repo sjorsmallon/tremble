@@ -1,6 +1,7 @@
 #pragma once
 #include "vec.hpp"
 #include <format>
+#include <random>
 
 struct AABB
 {
@@ -65,6 +66,58 @@ inline std::vector<AABB> read_AABBs_from_file(std::string& filename)
 
     return aabbs;
 }
+
+
+bool are_overlapping(const AABB& a, const AABB& b)
+{
+    return (a.min.x < b.max.x && a.max.x > b.min.x &&
+            a.min.y < b.max.y && a.max.y > b.min.y &&
+            a.min.z < b.max.z && a.max.z > b.min.z);
+}
+
+std::vector<AABB> generate_non_overlapping_aabbs(int num_aabbs, const vec3& extents, const AABB& bounds)
+{
+    std::vector<AABB> aabbs;
+    std::random_device rd; // Obtain a random number from hardware
+    std::mt19937 eng(rd()); // Seed the generator
+
+    std::uniform_real_distribution<> distr_x(bounds.min.x + extents.x / 2, bounds.max.x - extents.x / 2);
+    std::uniform_real_distribution<> distr_y(bounds.min.y + extents.y / 2, bounds.max.y - extents.y / 2);
+    std::uniform_real_distribution<> distr_z(bounds.min.z + extents.z / 2, bounds.max.z - extents.z / 2);
+
+    while (aabbs.size() < num_aabbs) {
+        // Generate random center for the AABB
+        float center_x = distr_x(eng);
+        float center_y = distr_y(eng);
+        float center_z = distr_z(eng);
+
+        // Calculate the min and max points of the AABB
+        vec3 aabb_min{center_x - extents.x / 2, center_y - extents.y / 2, center_z - extents.z / 2};
+        vec3 aabb_max{center_x + extents.x / 2, center_y + extents.y / 2, center_z + extents.z / 2};
+
+        // Create the AABB
+        AABB new_aabb(aabb_min, aabb_max);
+
+        // Check for overlaps with existing AABBs
+        bool overlap = false;
+        for (const auto& existing_aabb : aabbs)
+        {
+            if (are_overlapping(new_aabb, existing_aabb))
+            {
+                overlap = true;
+                break;
+            }
+        }
+
+        // If no overlap, add the new AABB to the list
+        if (!overlap) {
+            aabbs.push_back(new_aabb);
+        }
+    }
+
+    return aabbs;
+}
+
 
 
 #include "vertex.hpp"

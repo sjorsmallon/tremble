@@ -15,6 +15,7 @@
 #include "../src/AABB.hpp"
 #include "../src/camera.hpp"
 #include "../src/debug_draw.hpp"
+#include "../src/bsp.hpp"
 
 // this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
 static Key to_key(const SDL_Event& event)
@@ -255,6 +256,9 @@ uint32_t create_interleaved_xnc_shader_program()
 }
 
 
+
+
+
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
@@ -308,19 +312,31 @@ int main(int argc, char *argv[])
     // to be interpreted as (start, end).
     auto grid_vertices = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
     auto grid_gl_buffer=  create_x_buffer(grid_vertices);
-
-    auto arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 10.0f}, {100.0f, 0.0f, 10.0f}, 10.0f);
-    auto arrow_gl_buffer = create_interleaved_xnc_buffer(arrow_vertices);
-
-    auto x_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.15f);
-    auto x_arrow_gl_buffer = create_interleaved_xnc_buffer(x_arrow_vertices);
-
-    auto y_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.15f);
-    auto y_arrow_gl_buffer = create_interleaved_xnc_buffer(y_arrow_vertices);
-
-    auto z_arrow_vertices = generate_arrow_vertices(vec3{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, 0.15f);
-    auto z_arrow_gl_buffer = create_interleaved_xnc_buffer(z_arrow_vertices);
     
+
+
+    // BSP test.
+    int aabb_count = 50;
+    vec3 extents{5.0f, 5.0f, 5.0f}; // Full extents (width, height, depth)
+    AABB bounds{.min = vec3{-100.0f, -100.0f, -100.0f}, .max = {100.0f, 100.0f, 100.0f}}; // World space bounds
+
+    auto mini_aabbs = generate_non_overlapping_aabbs(aabb_count, extents, bounds);
+    auto mini_aabbs_vertices = to_vertex_xnc(mini_aabbs);
+    auto vertex_count = mini_aabbs_vertices.size();
+
+    std::vector<uint64_t> face_indices{};
+    int face_idx = 0;
+    while (face_idx < vertex_count)
+    {
+        face_indices.push_back(face_idx);
+        face_idx += 3;
+    }
+
+    BSP* bsp = build_bsp(face_indices, mini_aabbs_vertices);
+
+    // do this here so the color override from build_bsp is taken along.    
+    auto mini_aabbs_gl_buffer = create_interleaved_xnc_buffer(mini_aabbs_vertices);
+
 
     bool running = true;
     SDL_Event event;
@@ -333,14 +349,14 @@ int main(int argc, char *argv[])
     float near_z = 0.1f;
     float far_z = 500.f;
     float dt = 0.f;
-    double now = SDL_GetPerformanceCounter();
-    double last = 0.f;
-    float mouse_x;
-    float mouse_y;
-    float last_mouse_x;
-    float last_mouse_y;
+    uint64_t now = SDL_GetPerformanceCounter();
+    uint64_t last = 0.f;
+    float mouse_x{};
+    float mouse_y{};
+    float last_mouse_x{};
+    float last_mouse_y{};
 
-    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works".
+    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actualy uint64_t).
     while (running)
     {
          last = now;
@@ -350,35 +366,9 @@ int main(int argc, char *argv[])
          last_mouse_x = mouse_x;
          last_mouse_y = mouse_y;
 
-        // Process events
-        while (SDL_PollEvent(&event))
+         while (SDL_PollEvent(&event))
         {
-            //Note: this is _not good enough_ to deal with repeated keystrokes. we need to poll the keyboard state every frame. 
-            // if (event.type == SDL_EVENT_KEY_DOWN)
-            // {
-            //     auto key = to_key(event);
-            //     handle_keyboard_input(key);
-
-            //     // temporary debug stuff.
-            //     if (key == Key::KEY_P)
-            //     {
-            //         std::print("{}",camera.position);
-            //     }
-            // }
-
-            // if (event.type == SDL_EVENT_QUIT)
-            // {
-            //     running = false;
-            // }
-
-            // if (event.type == SDL_EVENT_MOUSE_MOTION)
-            // {
-            //     // auto& mouse_move = event.motion;
-            //     // float dx = mouse_move.xrel;
-            //     // float dy = mouse_move.yrel;
-            //     // 
-            // }
-            // Additional event handling can go here (e.g., input, window events)
+            // ignore all events.
         }
 
 
@@ -414,54 +404,19 @@ int main(int argc, char *argv[])
         //     glm::mat4(1.0f)
         //     );
 
-        // just the one arrow 
-        // draw_vertex_xnc_buffer(arrow_gl_buffer.VAO, arrow_gl_buffer.VBO, arrow_gl_buffer.vertex_count, xnc_shader_program,
-        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        //     get_look_at_view_matrix(camera),
-        //     glm::mat4(1.0f)
-        //     );
-
-        // the three arrows.
-        // think about glm::ortho.
-        // stop guessing.
-        glDisable(GL_DEPTH_TEST);
-
-
-        // think about it differently.
-        // projection is the same.
-        // the view is ok.
-        // the main thing is this: we need to translate it to the center of NDC. how do we do that?
-        // the translation is the translation in world space. I am confusing myself.
-
-        glm::mat4 projection = glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z);
-        glm::mat4 view = get_look_at_view_matrix(camera);
-        auto right = normalize(cross(camera.front, camera.up));
-        glm::mat4 translation = glm::translate(glm::mat4(1.0f), camera.position + 2.0f * normalize(camera.front) + 1.0f * normalize(right));
-
-
-        draw_vertex_xnc_buffer(x_arrow_gl_buffer.VAO, x_arrow_gl_buffer.VBO, x_arrow_gl_buffer.vertex_count, xnc_shader_program,
-            projection,
-            view,
-            translation
-        );
-        
-        draw_vertex_xnc_buffer(y_arrow_gl_buffer.VAO, y_arrow_gl_buffer.VBO, y_arrow_gl_buffer.vertex_count, xnc_shader_program,
-        projection,
-        view,
-        translation
-        );
-        
-        draw_vertex_xnc_buffer(z_arrow_gl_buffer.VAO, z_arrow_gl_buffer.VBO, z_arrow_gl_buffer.vertex_count, xnc_shader_program,
-        projection,
-        view,
-        translation
-        );
-        glEnable(GL_DEPTH_TEST);
-
-        draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+        draw_vertex_xnc_buffer(mini_aabbs_gl_buffer.VAO, mini_aabbs_gl_buffer.VBO, mini_aabbs_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_look_at_view_matrix(camera)
+            get_look_at_view_matrix(camera),
+            glm::mat4(1.0f)
             );
+
+
+
+
+        // draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        //     get_look_at_view_matrix(camera)
+        //     );
 
         SDL_GL_SwapWindow(window);
 
