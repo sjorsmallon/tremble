@@ -102,31 +102,44 @@ struct vec3
 
 };
 
+inline float length(const vec3& v)
+{
+    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+
+// messed up trick to avoid the "costly" sqrt.
+inline float length_squared(const vec3& v)
+{
+    return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
+
+
+inline float distance_between(const vec3& a, const vec3& b)
+{
+    vec3 diff = a - b;
+    return length(diff);
+}
+
 // negate
 vec3 operator-(const vec3& v)
 {
     return vec3{-v.x, -v.y, -v.z};
 }
 
-
-
-
 inline vec3 normalize(vec3 v)
 {
-    float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    float v_length = length(v);
 
     vec3 result = v;
-    result.x /= length;
-    result.y /= length;
-    result.z /= length;
+    result.x /= v_length;
+    result.y /= v_length;
+    result.z /= v_length;
 
     return result;
 }
 
-inline float length(const vec3& v)
-{
-    return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
 
 inline vec3 cross(const vec3& v1, const vec3& v2)
 {

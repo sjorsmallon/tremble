@@ -22,7 +22,9 @@ inline std::vector<vertex_xnc> generate_arrow_vertices(const vec3& start,const v
 
     // Arrowhead starts at the shaft end
     float arrowhead_radius = 1.5f * radius;  // Arrowhead is twice as wide as the shaft
-    float arrowhead_length = arrow_length - shaft_length; //-> this scales as a factor of length. I dislike this I guess. I would it to scale as a factor of the radius. too much thinking.
+   
+    //@FIXME: why is this not used?
+    //float arrowhead_length = arrow_length - shaft_length; //-> this scales as a factor of length. I dislike this I guess. I would it to scale as a factor of the radius. too much thinking.
 
     // 2. calculate tangent and bitangent axes.
     vec3 tangent{};

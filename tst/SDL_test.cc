@@ -314,7 +314,6 @@ int main(int argc, char *argv[])
     auto grid_gl_buffer=  create_x_buffer(grid_vertices);
     
 
-
     // BSP test.
     int aabb_count = 50;
     vec3 extents{5.0f, 5.0f, 5.0f}; // Full extents (width, height, depth)
@@ -371,7 +370,6 @@ int main(int argc, char *argv[])
             // ignore all events.
         }
 
-
         // handle keyboard input.
         {
             const bool* key_state = SDL_GetKeyboardState(NULL);
@@ -381,6 +379,30 @@ int main(int argc, char *argv[])
             bool move_left = key_state[SDL_SCANCODE_A];
             bool move_right = key_state[SDL_SCANCODE_D];
             camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
+
+            // color the closest face white.
+            //FIXME: the glm stuff is super annoying actually.
+            vec3 position = vec3{camera.position.x, camera.position.y, camera.position.z};
+            size_t closest_face_idx = find_closest_proximity_face_index(bsp, mini_aabbs_vertices, position, 2.5f);
+            if (closest_face_idx != -1)
+            {  
+                std::print("closest face found.\n");
+                glBindVertexArray(mini_aabbs_gl_buffer.VAO); 
+                glBindBuffer(GL_ARRAY_BUFFER, mini_aabbs_gl_buffer.VBO);
+
+                GLsizeiptr offset = closest_face_idx * sizeof(vertex_xnc);
+                vertex_xnc new_vertex = mini_aabbs_vertices[closest_face_idx];
+                new_vertex.color =vec4{1.0f,1.0f,1.0f, 1.0f}; 
+                GLsizeiptr size = sizeof(vertex_xnc); // Size of the new data
+                glBufferSubData(GL_ARRAY_BUFFER, offset, size, (void*)&new_vertex);
+
+                // Unbind the buffer and VAO (optional, but good practice)
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                glBindVertexArray(0);
+
+            }
+        
+
 
             if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
         }
@@ -409,9 +431,6 @@ int main(int argc, char *argv[])
             get_look_at_view_matrix(camera),
             glm::mat4(1.0f)
             );
-
-
-
 
         // draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
         //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
