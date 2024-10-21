@@ -228,3 +228,24 @@ static void draw_gimble(Camera& camera, GL_Buffer x_arrow_gl_buffer, GL_Buffer y
         );
         glEnable(GL_DEPTH_TEST);
 }
+
+
+
+// color the closest face white
+// if (closest_face_idx != -1)
+// {  
+//     std::print("closest face found.\n");
+//     glBindVertexArray(mini_aabbs_gl_buffer.VAO); 
+//     glBindBuffer(GL_ARRAY_BUFFER, mini_aabbs_gl_buffer.VBO);
+
+//     GLsizeiptr offset = closest_face_idx * sizeof(vertex_xnc);
+//     vertex_xnc new_vertex = mini_aabbs_vertices[closest_face_idx];
+//     new_vertex.color =vec4{1.0f,1.0f,1.0f, 1.0f}; 
+//     GLsizeiptr size = sizeof(vertex_xnc); // Size of the new data
+//     glBufferSubData(GL_ARRAY_BUFFER, offset, size, (void*)&new_vertex);
+
+//     // Unbind the buffer and VAO (optional, but good practice)
+//     glBindBuffer(GL_ARRAY_BUFFER, 0);
+//     glBindVertexArray(0);
+
+}

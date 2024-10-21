@@ -186,8 +186,8 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 	//@Memory: yikes
 	BSP* bsp = new BSP{};
 
-	// base case: I have no idea yet.
-	uint64_t best_candidate = -1; 
+	// base case: I have no idea yet. (why is the best_cadndiate unused? because it is just set automatically?)
+	// uint64_t best_candidate = -1; 
 	std::vector<uint64_t> best_front_indices{};
 	std::vector<uint64_t> best_back_indices{};
 	bool initial = true;
@@ -237,7 +237,6 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 			best_front_indices = std::move(front_indices);
 			best_back_indices = std::move(back_indices);
 			bsp->face_idx = candidate_idx;
-			best_candidate = candidate_idx;
 			initial = false;
 		}
 		else
@@ -246,11 +245,9 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 			// smaller delta means more balanced tree.
 			if (absolute_delta < abs(best_front_indices.size(), best_back_indices.size()))
 			{
-				std::print("found a new better dividing plane.\n");
 				best_front_indices = std::move(front_indices);
 				best_back_indices = std::move(back_indices);
 				bsp->face_idx = candidate_idx;
-				best_candidate  = candidate_idx;
 			}
 		}
 
@@ -316,10 +313,9 @@ inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc
 	auto& v0 = all_faces_buffer[bsp->face_idx].position;
 	auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
 	auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
-	Plane plane = to_plane(v0, v1, v2);
 
-	// is this the projection of the position onto the plane?
-	float distance = dot(plane.normal, position - plane.point);
+	// how close are we actually? if we are in the plane described by the triangle, or even if we are not.
+	float distance = point_to_triangle_distance(position, v0, v1, v2);
 
 	// ok, this is it.
 	if (distance < distance_treshold)

@@ -9,6 +9,8 @@
 #include <glm/glm.hpp>
 
 #include <print>
+#include <numeric> // std::accumulate
+#include <array>
 
 #include "../src/input.hpp"
 #include "../src/gl_helpers.hpp"
@@ -16,6 +18,17 @@
 #include "../src/camera.hpp"
 #include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
+
+// Macro to time a block of code or function call, and print function name
+#define TIMED_FUNCTION(code_block) \
+do { \
+    Uint64 start = SDL_GetPerformanceCounter(); \
+    code_block; \
+    Uint64 end = SDL_GetPerformanceCounter(); \
+    double elapsed_in_ms = (end - start) * 1000.0 / SDL_GetPerformanceFrequency(); \
+    std::print("Function '{}' took: {} ms\n", __func__, elapsed_in_ms); \
+} while(0)
+
 
 // this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
 static Key to_key(const SDL_Event& event)
@@ -135,9 +148,6 @@ static void draw_lines_vertex_x_buffer(
     glDrawArrays(GL_LINES, 0, vertex_count);
 }
 
-
-
-
 uint32_t create_x_shader_program()
 {
     const char* x_vertex_shader_src = R"(
@@ -160,7 +170,7 @@ uint32_t create_x_shader_program()
     out vec4 FragColor;
 
     void main() {
-        // Hardcoded line color (white)
+        // Hardcoded color
         FragColor = vec4(1.0, 1.0, 1.0, 1.0); // RGB + Alpha (opacity)
     }
     )";
@@ -255,10 +265,6 @@ uint32_t create_interleaved_xnc_shader_program()
     return shader_program;
 }
 
-
-
-
-
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
@@ -292,10 +298,12 @@ int main(int argc, char *argv[])
 
         // disable vsync
         SDL_GL_SetSwapInterval(0);
-    }
-    
-    set_global_gl_settings();
 
+        set_global_gl_settings();
+    }    
+
+    size_t current_idx = 0;
+    auto timings = std::array<double, 1024>{};
 
     // drawing related stuff.
     auto path = std::string{"../data/list_of_AABB"};
@@ -315,13 +323,14 @@ int main(int argc, char *argv[])
     
 
     // BSP test.
-    int aabb_count = 50;
-    vec3 extents{5.0f, 5.0f, 5.0f}; // Full extents (width, height, depth)
-    AABB bounds{.min = vec3{-100.0f, -100.0f, -100.0f}, .max = {100.0f, 100.0f, 100.0f}}; // World space bounds
+    int aabb_count = 500;
+    vec3 extents{25.0f, 25.0f, 25.0f}; // Full extents (width, height, depth)
+    AABB bounds{.min = vec3{-1000.0f, -1000.0f, -1000.0f}, .max = {1000.0f, 1000.0f, 1000.0f}}; // World space bounds
 
     auto mini_aabbs = generate_non_overlapping_aabbs(aabb_count, extents, bounds);
     auto mini_aabbs_vertices = to_vertex_xnc(mini_aabbs);
     auto vertex_count = mini_aabbs_vertices.size();
+    std::print("rendering {} vertices.\n", vertex_count);
 
     std::vector<uint64_t> face_indices{};
     int face_idx = 0;
@@ -346,7 +355,7 @@ int main(int argc, char *argv[])
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
     float near_z = 0.1f;
-    float far_z = 500.f;
+    float far_z = 2000.f;
     float dt = 0.f;
     uint64_t now = SDL_GetPerformanceCounter();
     uint64_t last = 0.f;
@@ -373,6 +382,8 @@ int main(int argc, char *argv[])
         // handle keyboard input.
         {
             const bool* key_state = SDL_GetKeyboardState(NULL);
+            if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
+
             // Handle continuous key press movement
             bool move_forward = key_state[SDL_SCANCODE_W];
             bool move_backward = key_state[SDL_SCANCODE_S];
@@ -383,28 +394,26 @@ int main(int argc, char *argv[])
             // color the closest face white.
             //FIXME: the glm stuff is super annoying actually.
             vec3 position = vec3{camera.position.x, camera.position.y, camera.position.z};
+            
+            // timing
+            auto before = SDL_GetPerformanceCounter();
+
             size_t closest_face_idx = find_closest_proximity_face_index(bsp, mini_aabbs_vertices, position, 2.5f);
-            if (closest_face_idx != -1)
-            {  
-                std::print("closest face found.\n");
-                glBindVertexArray(mini_aabbs_gl_buffer.VAO); 
-                glBindBuffer(GL_ARRAY_BUFFER, mini_aabbs_gl_buffer.VBO);
-
-                GLsizeiptr offset = closest_face_idx * sizeof(vertex_xnc);
-                vertex_xnc new_vertex = mini_aabbs_vertices[closest_face_idx];
-                new_vertex.color =vec4{1.0f,1.0f,1.0f, 1.0f}; 
-                GLsizeiptr size = sizeof(vertex_xnc); // Size of the new data
-                glBufferSubData(GL_ARRAY_BUFFER, offset, size, (void*)&new_vertex);
-
-                // Unbind the buffer and VAO (optional, but good practice)
-                glBindBuffer(GL_ARRAY_BUFFER, 0);
-                glBindVertexArray(0);
-
+            // timing
+            auto after = SDL_GetPerformanceCounter();
+            double search_time = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
+           
+            if (current_idx == timings.size())
+            {
+                current_idx = 0;
+                double sum = std::accumulate(timings.begin(), timings.end(), 0.0);
+                // Calculate the average
+                double average = sum / timings.size();
+                std::print("average cost of bsp traversal: {} ms\n", average * 1000.0);
             }
-        
+            timings[current_idx] = (search_time);
+            current_idx += 1;
 
-
-            if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
         }
 
         // handle mouse input. this still seems jerky and is sometimes degenerate, where it locks the y axis. I don't understand why.
@@ -429,8 +438,7 @@ int main(int argc, char *argv[])
         draw_vertex_xnc_buffer(mini_aabbs_gl_buffer.VAO, mini_aabbs_gl_buffer.VBO, mini_aabbs_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_look_at_view_matrix(camera),
-            glm::mat4(1.0f)
-            );
+            glm::mat4(1.0f));
 
         // draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
         //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
@@ -438,7 +446,6 @@ int main(int argc, char *argv[])
         //     );
 
         SDL_GL_SwapWindow(window);
-
     }
 
 
