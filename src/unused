@@ -249,3 +249,28 @@ static void draw_gimble(Camera& camera, GL_Buffer x_arrow_gl_buffer, GL_Buffer y
 //     glBindVertexArray(0);
 
 }
+
+
+
+    // set of AABBs. to test BSP generation with.
+    int aabb_count = 500;
+    vec3 extents{25.0f, 25.0f, 25.0f}; // Full extents (width, height, depth)
+    AABB bounds{.min = vec3{-1000.0f, -1000.0f, -1000.0f}, .max = {1000.0f, 1000.0f, 1000.0f}}; // World space bounds
+    auto mini_aabbs = generate_non_overlapping_aabbs(aabb_count, extents, bounds);
+    auto mini_aabbs_vertices = to_vertex_xnc(mini_aabbs);
+    auto mini_aabbs_gl_buffer = create_interleaved_xnc_buffer(mini_aabbs_vertices);
+
+    auto vertex_count = mini_aabbs_vertices.size();
+    BSP* bsp = nullptr;
+    {
+        std::vector<uint64_t> face_indices{};
+        int face_idx = 0;
+        while (face_idx < vertex_count)
+        {
+            face_indices.push_back(face_idx);
+            face_idx += 3;
+        }
+
+        bsp = build_bsp(face_indices, mini_aabbs_vertices);
+    }
+  

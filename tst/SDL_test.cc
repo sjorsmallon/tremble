@@ -18,6 +18,7 @@
 #include "../src/camera.hpp"
 #include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
+#include "../src/player_move.hpp"
 
 // Macro to time a block of code or function call, and print function name
 #define TIMED_FUNCTION(code_block) \
@@ -92,7 +93,6 @@ void handle_keyboard_input(Key key)
         // {
         //     break;    
         // }
-
 
         // case Key::KEY_D:
         // {
@@ -296,66 +296,58 @@ int main(int argc, char *argv[])
         // huh. even though I did not do this, it seems to not help.
         SDL_GL_MakeCurrent(window, gl_context);
 
-        // disable vsync
-        SDL_GL_SetSwapInterval(0);
+        // enable vsync
+        std::print("WARNING: vsync is ON.\n");
+        SDL_GL_SetSwapInterval(1);
 
         set_global_gl_settings();
     }    
-
-    size_t current_idx = 0;
-    auto timings = std::array<double, 1024>{};
-
-    // drawing related stuff.
-    auto path = std::string{"../data/list_of_AABB"};
-    auto aabbs = read_AABBs_from_file(path);
-    auto vertices  = to_vertex_xnc(aabbs);
-    auto aabb_gl_buffer = create_interleaved_xnc_buffer(vertices);
-
+    // shaders related
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
     uint32_t x_shader_program = create_x_shader_program();
 
+
+    // timing related
+    size_t current_timing_idx = 0;
+    auto timings = std::array<double, 1024>{};
+
+    // base AABB.
+    auto path = std::string{"../data/list_of_AABB"};
+    auto aabbs = read_AABBs_from_file(path);
+    auto aabbs_vertices  = to_vertex_xnc(aabbs);
+    auto aabb_gl_buffer = create_interleaved_xnc_buffer(aabbs_vertices);
+    BSP* bsp = nullptr;
+    {
+        std::vector<uint64_t> face_indices{};
+        int face_idx = 0;
+        while (face_idx < aabbs_vertices.size())
+        {
+            face_indices.push_back(face_idx);
+            face_idx += 3;
+        }
+
+        bsp = build_bsp(face_indices, aabbs_vertices);
+    }
+
+    // grid related.
     float grid_size = 1000.0f;
     float grid_spacing = 10.0f;
-
     // to be interpreted as (start, end).
     auto grid_vertices = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
     auto grid_gl_buffer=  create_x_buffer(grid_vertices);
     
-
-    // BSP test.
-    int aabb_count = 500;
-    vec3 extents{25.0f, 25.0f, 25.0f}; // Full extents (width, height, depth)
-    AABB bounds{.min = vec3{-1000.0f, -1000.0f, -1000.0f}, .max = {1000.0f, 1000.0f, 1000.0f}}; // World space bounds
-
-    auto mini_aabbs = generate_non_overlapping_aabbs(aabb_count, extents, bounds);
-    auto mini_aabbs_vertices = to_vertex_xnc(mini_aabbs);
-    auto vertex_count = mini_aabbs_vertices.size();
-    std::print("rendering {} vertices.\n", vertex_count);
-
-    std::vector<uint64_t> face_indices{};
-    int face_idx = 0;
-    while (face_idx < vertex_count)
-    {
-        face_indices.push_back(face_idx);
-        face_idx += 3;
-    }
-
-    BSP* bsp = build_bsp(face_indices, mini_aabbs_vertices);
-
-    // do this here so the color override from build_bsp is taken along.    
-    auto mini_aabbs_gl_buffer = create_interleaved_xnc_buffer(mini_aabbs_vertices);
 
 
     bool running = true;
     SDL_Event event;
 
     // game state.
-    auto camera = Camera{};    
+    auto camera = Camera{};
     float move_speed = 100.0f;
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
     float near_z = 0.1f;
-    float far_z = 2000.f;
+    float far_z = 4000.f;
     float dt = 0.f;
     uint64_t now = SDL_GetPerformanceCounter();
     uint64_t last = 0.f;
@@ -363,6 +355,10 @@ int main(int argc, char *argv[])
     float mouse_y{};
     float last_mouse_x{};
     float last_mouse_y{};
+    // entity related
+    vec3 player_velocity{};
+    vec3 player_position{.0f, 100.f, .0f};
+    Move_Input move_input{};
 
     //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actualy uint64_t).
     while (running)
@@ -385,34 +381,31 @@ int main(int argc, char *argv[])
             if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
 
             // Handle continuous key press movement
-            bool move_forward = key_state[SDL_SCANCODE_W];
-            bool move_backward = key_state[SDL_SCANCODE_S];
-            bool move_left = key_state[SDL_SCANCODE_A];
-            bool move_right = key_state[SDL_SCANCODE_D];
-            camera = update_camera(camera, dt, move_forward, move_left, move_backward, move_right, move_speed);
+            move_input.forward_pressed = key_state[SDL_SCANCODE_W];
+            move_input.backward_pressed = key_state[SDL_SCANCODE_S];
+            move_input.left_pressed = key_state[SDL_SCANCODE_A];
+            move_input.right_pressed = key_state[SDL_SCANCODE_D];
+            move_input.jump_pressed = key_state[SDL_SCANCODE_SPACE];
 
-            // color the closest face white.
-            //FIXME: the glm stuff is super annoying actually.
-            vec3 position = vec3{camera.position.x, camera.position.y, camera.position.z};
-            
-            // timing
-            auto before = SDL_GetPerformanceCounter();
+            // first, update the player position and velocity.
+            glm::vec3 right = glm::cross(camera.front, camera.up);
+            auto [new_position, new_velocity] = walk_move(
+                move_input,
+                player_position,
+                player_velocity,
+                vec3{camera.front.x, camera.front.y, camera.front.z},
+                vec3{right.x, right.y, right.z},
+                dt);
 
-            size_t closest_face_idx = find_closest_proximity_face_index(bsp, mini_aabbs_vertices, position, 2.5f);
-            // timing
-            auto after = SDL_GetPerformanceCounter();
-            double search_time = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
-           
-            if (current_idx == timings.size())
-            {
-                current_idx = 0;
-                double sum = std::accumulate(timings.begin(), timings.end(), 0.0);
-                // Calculate the average
-                double average = sum / timings.size();
-                std::print("average cost of bsp traversal: {} ms\n", average * 1000.0);
-            }
-            timings[current_idx] = (search_time);
-            current_idx += 1;
+            player_position = new_position;
+            player_velocity = new_velocity;
+
+            camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
+
+            // camera = update_camera(camera, dt,  move_input.forward_pressed, move_input.left_pressed,  move_input.backward_pressed,  move_input.right_pressed, move_speed);
+
+            vec3 position = vec3{player_position.x, player_position.y, player_position.z};
+            size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, position, 2.5f);
 
         }
 
@@ -429,21 +422,16 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
         // aabbs.
-        // draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
-        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        //     get_look_at_view_matrix(camera),
-        //     glm::mat4(1.0f)
-        //     );
-
-        draw_vertex_xnc_buffer(mini_aabbs_gl_buffer.VAO, mini_aabbs_gl_buffer.VBO, mini_aabbs_gl_buffer.vertex_count, xnc_shader_program,
+        draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_look_at_view_matrix(camera),
-            glm::mat4(1.0f));
+            glm::mat4(1.0f)
+            );
 
-        // draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
-        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        //     get_look_at_view_matrix(camera)
-        //     );
+        draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+            get_look_at_view_matrix(camera)
+            );
 
         SDL_GL_SwapWindow(window);
     }

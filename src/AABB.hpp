@@ -30,25 +30,52 @@ struct std::formatter<AABB> : std::formatter<std::string> {
 #include <vector>
 #include <string>
 
+std::vector<std::string> split_string(const std::string& str, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);  // Turn the string into a stream
+    std::string token;
+
+    // Extract tokens split by the delimiter
+    while (std::getline(ss, token, delimiter)) {
+        if (!token.empty()) {  // Skip empty tokens (if any)
+            tokens.push_back(token);
+        }
+    }
+    return tokens;
+}
+
+
 inline std::vector<AABB> read_AABBs_from_file(std::string& filename)
 {
-	auto parse_line_to_aabb = [](const std::string& line) -> AABB {
-		
+	auto parse_line_to_aabb = [](const std::string& line) -> AABB{
 		auto aabb = AABB{};
 	    std::stringstream ss(line);
 	    std::string temp;
 
-	    // Parse the 'min:' part
-	    ss >> temp >> aabb.min.x >> aabb.min.y >> aabb.min.z;
+	    if (line.find("{") != std::string::npos)
+        {
+            // Format: min: {-2000, -2000, -2000}, max: {2000, -1000, 2000}
+            std::stringstream ss(line);
+            std::string token;
+            // Parse "min" values
+            std::getline(ss, token, '{'); // Discard "min: {"
+            std::getline(ss, token, '}');
+            auto minValues = split_string(token, ',');
+            aabb.min = vec3{std::stof(minValues[0]), std::stof(minValues[1]), std::stof(minValues[2])};
 
-	    // Parse the 'max:' part
-	    ss >> temp >> aabb.max.x >> aabb.max.y >> aabb.max.z;
-
+            // Parse "max" values
+            std::getline(ss, token, '{'); // Discard ", max: {"
+            std::getline(ss, token, '}');
+            auto maxValues = split_string(token, ',');
+            aabb.max = vec3{std::stof(maxValues[0]), std::stof(maxValues[1]), std::stof(maxValues[2])};
+        }
+        std::print("parsed aabb. min: {}, max: {}\n", aabb.min, aabb.max);
 	    return aabb;
 	};
 
 	auto aabbs = std::vector<AABB>{};
-	auto file = std::ifstream{filename};
+	auto file = std::ifstream(filename);
 
     if (!file.is_open())
     {

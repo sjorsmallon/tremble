@@ -172,7 +172,7 @@ float point_to_triangle_distance(const vec3& p, const vec3& v0, const vec3& v1, 
 }
 
 
-
+//@Memory: we never free this
 //@Speed: Quadratic behavior! for all planes, for all other planes. or is it log?
 // global_buffer is not const since it can be the case we add faces based on a STRADDLING face.
 BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all_faces_buffer)
@@ -255,45 +255,6 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 
 	bsp->front = build_bsp(best_front_indices, all_faces_buffer);
 	bsp->back = build_bsp(best_back_indices, all_faces_buffer);
-
-	// assert(best_front_indices.size() > 0);
-	// assert(best_back_indices.size() > 0);
-
-	// for debug purposes: color front facing green, color back facing red.
-	// for (auto index: best_front_indices)
-	// {
-	// 	auto& v0 = all_faces_buffer[index];
-	// 	auto& v1 = all_faces_buffer[index + 1];
-	// 	auto& v2 = all_faces_buffer[index + 2];
-
-	// 	// teal
-	// 	v0.color = vec4{0.0f, 1.0f, 0.0f,1.0f};
-	// 	v1.color = vec4{0.0f, 1.0f, 0.0f,1.0f};
-	// 	v2.color = vec4{0.0f, 1.0f, 0.0f,1.0f};
-	// }
-
-	// for (auto index: best_back_indices)
-	// {
-	// 	auto& v0 = all_faces_buffer[index];
-	// 	auto& v1 = all_faces_buffer[index + 1];
-	// 	auto& v2 = all_faces_buffer[index + 2];
-
-	// 	//red
-	// 	v0.color = vec4{1.0f, 0.0f, 0.0f,1.0f};
-	// 	v1.color = vec4{1.0f, 0.0f, 0.0f,1.0f};
-	// 	v2.color = vec4{1.0f, 0.0f, 0.0f,1.0f};
-	// }
-
-	// the dividing plane.
-
-	// auto& v0 = all_faces_buffer[best_candidate];
-	// auto& v1 = all_faces_buffer[best_candidate + 1];
-	// auto& v2 = all_faces_buffer[best_candidate + 2];
-
-	// //white
-	// v0.color = vec4{1.0f, 1.0f, 1.0f,1.0f};
-	// v1.color = vec4{1.0f, 1.0f, 1.0f,1.0f};
-	// v2.color = vec4{1.0f, 1.0f, 1.0f,1.0f};
 
 	return bsp;
 }
