@@ -128,16 +128,52 @@ vec3 operator-(const vec3& v)
     return vec3{-v.x, -v.y, -v.z};
 }
 
+// This normalize is giving me NaN issues in player_move. with normalizing the front vector. - Sjors, 22-10-2024
+// inline vec3 normalize(vec3 v)
+// {
+//     float v_length = length(v);
+
+//     vec3 result = v;
+//     result.x /= v_length;
+//     result.y /= v_length;
+//     result.z /= v_length;
+
+//     return result;
+// }
+
+
 inline vec3 normalize(vec3 v)
 {
     float v_length = length(v);
+    const float epsilon = 1e-8f;
 
-    vec3 result = v;
-    result.x /= v_length;
-    result.y /= v_length;
-    result.z /= v_length;
+    if (v_length > epsilon)
+    {
+        v.x /= v_length;
+        v.y /= v_length;
+        v.z /= v_length;
+    }
+    else
+    {
+        if (abs(v.x) > epsilon) //
+        {
+            v = vec3{(v.x > 0.0f ? 1.0f : -1.0f), 0.0f, 0.0f};
+        }
+        else if (abs(v.y) > epsilon)
+        {
+            v = vec3{0.0f, (v.y > 0.0f ? 1.0f : -1.0f), 0.0f};
+        }
+        else if (abs(v.z) > epsilon)
+        {
+            v = vec3{0.0f, 0.0f, (v.z > 0.0f ? 1.0f : -1.0f)};
+        }
+        else
+        {
+            v = vec3{0.0f, 0.0f, 0.0f};
+        }
+    }
 
-    return result;
+    return v;
 }
 
 

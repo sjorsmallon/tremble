@@ -5,6 +5,32 @@
 
 #include "../src/vertex.hpp"
 #include "vec.hpp"
+#include <iostream>
+#include <fstream>
+
+std::string file_to_string(const std::string& filename)
+{
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
+
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::string content;
+    content.resize(size);
+
+    if (!file.read(&content[0], size))
+    {
+        throw std::runtime_error("Error reading file: " + filename);
+    }
+
+    return content;
+}
+
+
 
 // openGL error callback
 void GLAPIENTRY opengl_message_callback(
@@ -92,7 +118,7 @@ GL_Buffer create_x_buffer(const std::vector<vec3>& values)
 
     // Fill the buffer with vertex data (position only)
     glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
-    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vertex_xnc), values.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vec3), values.data(), GL_STATIC_DRAW); // yikes, that was wrong.
 
     // Attribute IDs and layout for position
     const int32_t position_attribute_id = 0;
@@ -120,6 +146,69 @@ GL_Buffer create_x_buffer(const std::vector<vec3>& values)
 
     return gl_buffer;
 }
+
+
+
+GL_Buffer create_interleaved_xu_buffer(const std::vector<vertex_xu>& values)
+{
+    GL_Buffer gl_buffer{};
+
+    // Generate and bind VAO and VBO
+    glGenVertexArrays(1, &gl_buffer.VAO); 
+    glGenBuffers(1, &gl_buffer.VBO);
+    glBindVertexArray(gl_buffer.VAO);
+
+    // Fill the buffer with vertex data (position only)
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vertex_xu), values.data(), GL_STATIC_DRAW);
+
+    // Attribute IDs and layout for position
+    const int32_t position_attribute_id = 0;
+    const int32_t uv_attribute_id = 1;
+
+    const int32_t position_float_count = 3;
+    const int32_t uv_float_count = 2;
+
+    const int32_t position_byte_offset = 0;
+    const int32_t uv_byte_offset = position_float_count * sizeof(float);
+
+    const int32_t vertex_float_count = position_float_count + uv_float_count;
+    const int32_t vertex_byte_stride = vertex_float_count * sizeof(float);
+
+    // Set the vertex count
+    gl_buffer.vertex_count = values.size();
+
+    // Enable and specify the position attribute (vec3)
+    glEnableVertexAttribArray(position_attribute_id);
+    glVertexAttribPointer(
+        position_attribute_id,
+        position_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)position_byte_offset
+    );
+
+    glEnableVertexAttribArray(uv_attribute_id);
+    glVertexAttribPointer(
+        uv_attribute_id,
+        uv_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)uv_byte_offset
+    );
+
+
+    // Unbind the buffer and VAO
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return gl_buffer;
+}
+
+
+
 
 GL_Buffer create_interleaved_xnc_buffer(const std::vector<vertex_xnc>& interleaved_xnc_values)
 {
@@ -192,6 +281,10 @@ GL_Buffer create_interleaved_xnc_buffer(const std::vector<vertex_xnc>& interleav
 }
 
 
+
+// we're at the point where maybe we should generalize this. is it possible to do this at compile time? by looking at the types?
+
+
 std::vector<vertex_xnc> create_default_triangle()
 {
     std::vector<vertex_xnc> triangle;
@@ -232,6 +325,8 @@ bool check_program_link_status(GLuint program)
         return false; 
     }
     
+    std::print("program linked succesfully.\n");
+
     return true; 
 }
 
@@ -248,6 +343,8 @@ bool check_shader_compile_status(GLuint shader)
         return false;
     }
     
+    std::print("shader compiled succesfully.\n");
+
     return true;
 }
 
@@ -321,9 +418,13 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     }
 
     // Set the uniform based on its type
-    if constexpr (std::is_same_v<Type, vec3>)
+    if constexpr (std::is_same_v<Type, float>)
     {
-        glUniform3fv(location, 1, &value);
+        glUniform1f(location, value);        
+    }
+    else if constexpr (std::is_same_v<Type, vec3>) 
+    {
+        glUniform3fv(location, 1, (float*)&value);
     }
     else if constexpr (std::is_same_v<Type, vec4>)
     {
@@ -332,9 +433,59 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     {
         glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(value));
     } else {
-        static_assert(std::is_same_v<Type, vec3> || std::is_same_v<Type, vec4> || std::is_same_v<Type, glm::mat4>,
+        static_assert(std::is_same_v<Type, vec3> || std::is_same_v<Type, vec3> || std::is_same_v<Type, vec4> || std::is_same_v<Type, glm::mat4>,
                       "Unsupported uniform type.");
     }
 }
 
+void print_shader_uniforms(GLuint shader_program)
+{
+    GLint uniform_count;
+    glGetProgramiv(shader_program, GL_ACTIVE_UNIFORMS, &uniform_count);
 
+    std::print("Active Uniforms: {}\n", uniform_count);
+
+    for (GLint i = 0; i < uniform_count; ++i)
+    {
+        char uniform_name[256];
+        GLsizei length;
+        GLint size;
+        GLenum type;
+
+        glGetActiveUniform(shader_program, i, sizeof(uniform_name), &length, &size, &type, uniform_name);
+
+        GLint location = glGetUniformLocation(shader_program, uniform_name);
+
+        // Print the uniform information
+        std::print("Uniform #{}: {}\n", i, uniform_name);
+        std::print("  Location: {}\n", location);
+        std::print("  Size: {}\n", size);
+        std::print("  Type: 0x{:X}\n", type);  // Print the type in hexadecimal (GL_FLOAT, GL_INT, etc.)
+    }
+}
+
+
+// this can maybe generalized later but i don't care for now.
+// uh, i think this is ill-defined for three dimensions. 
+std::vector<vertex_xu> generate_uv_quad_vertex_xu(vec3 min, vec3 max)
+{
+    std::print("{} WARNING: THIS FUNCTION IS NOT REALLY IMPLEMENTED WELL!\n", __func__);
+    std::vector<vertex_xu> uv_quad;
+
+    // Define the four corners of the quad
+    vertex_xu v0 = vertex_xu{.position = vec3{max.x, max.y, max.z}, .uv = vec2{1.0f, 1.0f} }; // Top-right
+    vertex_xu v1 = vertex_xu{.position = vec3{min.x, min.y, min.z}, .uv = vec2{0.0f, 0.0f} }; // Bottom-left
+    vertex_xu v2 = vertex_xu{.position = vec3{max.x, min.y, min.z}, .uv = vec2{1.0f, 0.0f} }; // Bottom-right
+    vertex_xu v3 = vertex_xu{.position = vec3{min.x, max.y, max.z}, .uv = vec2{0.0f, 1.0f} }; // Top-left
+
+    // Define indices for two triangles
+    uv_quad.push_back(v3); // v1
+    uv_quad.push_back(v2); // v2
+    uv_quad.push_back(v1); // v3
+
+    uv_quad.push_back(v2); // v0
+    uv_quad.push_back(v3); // v3
+    uv_quad.push_back(v0); // v2
+
+    return uv_quad;
+}

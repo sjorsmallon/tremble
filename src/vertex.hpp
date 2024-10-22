@@ -23,3 +23,22 @@ struct std::formatter<vertex_xnc> : std::formatter<std::string> {
 };
 
 
+struct vertex_xu
+{
+    vec3 position; // 12 bytes
+    vec2 uv; // 8 bytes (20)
+};
+
+static_assert(sizeof(vertex_xu) == 20);
+
+// Define formatter specialization for vec2 (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)
+template <>
+struct std::formatter<vertex_xu> : std::formatter<std::string> {
+    // Format the vertex_xu as a string
+    auto format(const vertex_xu& vertex, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "position: {}, uv: {}", vertex.position, vertex.uv);
+    }
+};
+
+
+

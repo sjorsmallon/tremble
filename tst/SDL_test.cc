@@ -108,7 +108,7 @@ void handle_keyboard_input(Key key)
 }
 
 // there is a better abstraction here that will come later.
-static void draw_vertex_xnc_buffer(
+static void draw_triangles(
     const uint32_t VAO,
     const uint32_t VBO,
     const size_t vertex_count,
@@ -128,7 +128,7 @@ static void draw_vertex_xnc_buffer(
     glDrawArrays(GL_TRIANGLES, 0, vertex_count);
 }
 
-static void draw_lines_vertex_x_buffer(
+static void draw_lines(
     const uint32_t VAO,
     const uint32_t VBO,
     const size_t vertex_count,
@@ -293,11 +293,11 @@ int main(int argc, char *argv[])
         // do some trickery with glad to actually load modern opengl.
         gladLoadGL();
 
-        // huh. even though I did not do this, it seems to not help.
+        // huh. even though I did not do this, it seems to not matter.
         SDL_GL_MakeCurrent(window, gl_context);
 
         // enable vsync
-        std::print("WARNING: vsync is ON.\n");
+        // std::print("WARNING: vsync is ON.\n");
         SDL_GL_SetSwapInterval(1);
 
         set_global_gl_settings();
@@ -330,12 +330,34 @@ int main(int argc, char *argv[])
     }
 
     // grid related.
-    float grid_size = 1000.0f;
+    float grid_size    = 1000.0f;
     float grid_spacing = 10.0f;
     // to be interpreted as (start, end).
-    auto grid_vertices = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
-    auto grid_gl_buffer=  create_x_buffer(grid_vertices);
+    auto grid_vertices  = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
+    auto grid_gl_buffer =  create_x_buffer(grid_vertices);
     
+
+    // uv grid related.
+    auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
+    auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
+    auto uv_grid_vertices = generate_uv_quad_vertex_xu(vec3{0.f, 0.0f, 0.f}, vec3{1000.f, 0.0f, 1000.0f});
+
+    std::print("uv_grid_vertex_shader_str: {}\n", uv_grid_vertex_shader_str);
+    std::print("uv_grid_fragment_shader_str: {}\n", uv_grid_fragment_shader_str);
+    auto uv_grid_shader_program = create_shader_program(
+        uv_grid_vertex_shader_str.c_str(),
+        uv_grid_fragment_shader_str.c_str()
+    );
+
+    print_shader_uniforms(uv_grid_shader_program);
+
+    set_uniform(uv_grid_shader_program, "grid_spacing", 10.f);
+    set_uniform(uv_grid_shader_program, "line_thickness", 2.0f);
+    set_uniform(uv_grid_shader_program, "line_color", vec3{1.0f,1.0f,1.0f});
+    set_uniform(uv_grid_shader_program, "background_color", vec3{1.0f,0.0f,0.0f});
+
+    auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
+
 
 
     bool running = true;
@@ -360,7 +382,7 @@ int main(int argc, char *argv[])
     vec3 player_position{.0f, 100.f, .0f};
     Move_Input move_input{};
 
-    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actualy uint64_t).
+    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
     while (running)
     {
          last = now;
@@ -389,7 +411,7 @@ int main(int argc, char *argv[])
 
             // first, update the player position and velocity.
             glm::vec3 right = glm::cross(camera.front, camera.up);
-            auto [new_position, new_velocity] = walk_move(
+            auto [new_position, new_velocity] = my_walk_move(
                 move_input,
                 player_position,
                 player_velocity,
@@ -402,7 +424,7 @@ int main(int argc, char *argv[])
 
             camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
 
-            // camera = update_camera(camera, dt,  move_input.forward_pressed, move_input.left_pressed,  move_input.backward_pressed,  move_input.right_pressed, move_speed);
+
 
             vec3 position = vec3{player_position.x, player_position.y, player_position.z};
             size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, position, 2.5f);
@@ -422,15 +444,23 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
         // aabbs.
-        draw_vertex_xnc_buffer(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+        draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
             get_look_at_view_matrix(camera),
             glm::mat4(1.0f)
             );
 
-        draw_lines_vertex_x_buffer(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+        // vertex grid.
+        // draw_lines(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
+        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+        //     get_look_at_view_matrix(camera)
+        //     );
+
+        // uv grid
+        draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
             glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_look_at_view_matrix(camera)
+            get_look_at_view_matrix(camera),
+            glm::mat4(1.0f)
             );
 
         SDL_GL_SwapWindow(window);

@@ -10,8 +10,8 @@ struct Camera
     float pitch{0.f};
 };
 
-//@Memory: why not update in place?
-// this is some messed up construction that we will fix later.
+
+//@NOTE(SJORS): this is kind of a free floating camera. this is "mostly" obsolete now that we have player_move, but I will keep it for now.
 inline Camera update_camera(
 	const Camera& old_camera,
 	float dt,
@@ -45,8 +45,8 @@ inline Camera look_around(const Camera& old_camera, float x_offset, float y_offs
     camera.pitch -= y_offset;
 
     // Limit pitch angle
-    if (camera.pitch > 89.0f) camera.pitch = 89.0f;
-    if (camera.pitch < -89.0f) camera.pitch = -89.0f;
+    if (camera.pitch > 89.9f) camera.pitch = 89.9f;
+    if (camera.pitch < -89.9f) camera.pitch = -89.9f;
 
     glm::vec3 front{};
     front.x = cos(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
