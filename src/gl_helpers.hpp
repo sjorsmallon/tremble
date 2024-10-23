@@ -410,6 +410,9 @@ uint32_t create_shader_program(
 #include <glm/glm.hpp>  // For GLM vector types and functions
 #include <glm/gtc/type_ptr.hpp>  // For convenient functions like value_ptr
 
+
+///WARNING::::: PLEASE BE CAREFUL WHEN ADDING SOMETHING NEW TO THIS THING. DO NOT COPY PASTE,
+// MAKE SURE YOU USE THE RIGHT GLUNIFORM FUNCTION, AND THE RIGHT TYPE (EITHER GLM OR NOT).
 template <typename Type>
 inline void set_uniform(GLuint program_id, const std::string_view name, const Type& value)
 {
@@ -418,6 +421,7 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     {
          std::print("Uniform '{}' does not exist in the shader program.\n", name);;
     }
+    glUseProgram(program_id);
 
     // Set the uniform based on its type
     if constexpr (std::is_same_v<Type, float>)
@@ -426,7 +430,7 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     }
     else if constexpr (std::is_same_v<Type, vec2>) 
     {
-        glUniform3fv(location, 1, (float*)&value);
+        glUniform2fv(location, 1, (float*)&value);
     }
     else if constexpr (std::is_same_v<Type, vec3>) 
     {

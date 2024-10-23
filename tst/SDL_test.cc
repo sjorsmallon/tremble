@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
     auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
     auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
     vec2 grid_world_space_dimensions = vec2{1000.f, 1000.f};
-    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, 5000.0f, 5000.0f);
+    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, 1000.0f, 1000.0f);
 
     auto uv_grid_shader_program = create_shader_program(
         uv_grid_vertex_shader_str.c_str(),
@@ -439,12 +439,11 @@ int main(int argc, char *argv[])
         }
     }
 
-
-    set_uniform(uv_grid_shader_program, "grid_spacing", 10.f);
-    set_uniform(uv_grid_shader_program, "line_thickness", 0.5f);
-    set_uniform(uv_grid_shader_program, "line_color", vec3{1.0f,1.0f,1.0f});
-    set_uniform(uv_grid_shader_program, "background_color", vec3{1.0f,0.0f,0.0f});
-    set_uniform(uv_grid_shader_program, "grid_dimensions", grid_world_space_dimensions);
+    // set_uniform(uv_grid_shader_program, "grid_spacing", 10.f);
+    set_uniform(uv_grid_shader_program, "line_thickness", 10.0f);
+    // set_uniform(uv_grid_shader_program, "line_color", vec3{1.0f,1.0f,1.0f});
+    // set_uniform(uv_grid_shader_program, "background_color", vec3{1.0f,0.0f,0.0f});
+    set_uniform(uv_grid_shader_program, "grid_dimensions", vec2{1000.f, 1000.f});
 
 
     auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
