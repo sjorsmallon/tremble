@@ -38,11 +38,11 @@ static_assert(sizeof(Packet) <= 1452);
 
 template <typename Type>
 requires Pod<Type> || PodVectorConcept<Type>
-std::vector<Packet> convert_to_packets(const Type& input)
+std::vector<Packet> convert_to_packets(const Type& input, Message_Type message_type)
 {
  	if constexpr (Pod<Type>)
  	{
- 		std::print("Pod<Type>\n");
+ 		// std::print("Pod<Type>\n");
 		size_t byte_count = sizeof(input);
 		size_t packet_count = 0;
 
@@ -70,11 +70,12 @@ std::vector<Packet> convert_to_packets(const Type& input)
 
 	        // fill the packet buffer with the appropriate data from the pod
 	        std::memcpy(packet.buffer, reinterpret_cast<const uint8_t*>(&input) + offset, chunk_size);
-
+	        packet.header.message_type = message_type;
 	        packet.header.sequence_id = sequence_id;
 			packet.header.sequence_count = packet_count;
 			packet.header.sequence_idx = packet_idx_in_sequence;
 			packet.header.payload_size = chunk_size;
+
 
 			packet_idx_in_sequence += 1;
 		}
@@ -109,7 +110,8 @@ std::vector<Packet> convert_to_packets(const Type& input)
 
 	        // fill the packet buffer with the appropriate data from the pod
 	        std::memcpy(packet.buffer, reinterpret_cast<const uint8_t*>(input.data()) + offset, chunk_size);
-
+	        
+	        packet.header.message_type = message_type;
 	        packet.header.sequence_id    = sequence_id;
 			packet.header.sequence_count = packet_count;
 			packet.header.sequence_idx   = packet_idx_in_sequence;

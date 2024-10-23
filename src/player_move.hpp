@@ -1,5 +1,9 @@
 #pragma once
 #include <print>
+
+
+//@Note: this move input is serialized and sent across the wire. I don't think that this is the correct place to define it.
+// but I will leave it here for now.
 struct Move_Input 
 {
 	bool forward_pressed;
@@ -8,6 +12,21 @@ struct Move_Input
 	bool right_pressed;
 	bool jump_pressed;
 };
+
+Move_Input generate_random_input()
+{
+    Move_Input input{};
+
+    // Assign random boolean values to each field (true or false)
+    input.forward_pressed = rand() % 2;   // 0 or 1
+    input.backward_pressed = rand() % 2;  // 0 or 1
+    input.left_pressed = rand() % 2;      // 0 or 1
+    input.right_pressed = rand() % 2;     // 0 or 1
+    // input.jump_pressed = rand() % 2;      // 0 or 1
+
+    return input;   
+}
+
 
 // Velocity is a vector. i.e. velocity = {vx, vy, vz}. both magnitude and direction.
 // SPEED is how we describe the magnitude of velocity.

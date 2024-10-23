@@ -31,7 +31,7 @@ int main()
 	    client.open();
 	    client.broadcast(true);
 
-	    std::vector<Packet> packets = convert_to_packets(positions);
+	    std::vector<Packet> packets = convert_to_packets(positions, MESSAGE_JOIN_SERVER);
 
         for (auto& packet: packets)
         {

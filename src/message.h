@@ -18,6 +18,7 @@ enum Message_Type : uint8_t
 	MESSAGE_JOIN_SERVER_ACCEPTED,
 	MESSAGE_RECEIVED, // general ack for each packet?
 	MESSAGE_MISSING_PACKET, // send back an index and a sequence?
+	MESSAGE_PLAYER_INPUT
 };
 
 std::string to_string(Message_Type message_type)

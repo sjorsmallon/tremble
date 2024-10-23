@@ -20,6 +20,13 @@ public:
     using std::vector<Type>::vector; // Inherit constructors from std::vector
 };
 
+template <Pod Type, size_t N>
+class Pod_Array : public std::array<Type, N> {
+
+public:
+    using std::array<Type, N>::array;
+};
+
 template<typename T>
 concept PodVectorConcept = requires {
     typename T::value_type; // Check if T has a value_type
