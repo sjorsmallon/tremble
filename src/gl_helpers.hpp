@@ -77,8 +77,6 @@ inline void set_global_gl_settings()
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
 
-        // set clear color to WHITE.
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         // Enable use of the z-buffer
         glEnable(GL_DEPTH_TEST); // default is GL_LESS
 
@@ -92,6 +90,10 @@ inline void set_global_gl_settings()
 
         // DISABLE transparency
         glDisable(GL_BLEND);
+
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDisable(GL_FRAMEBUFFER_SRGB);
+
     }
 }
 
@@ -422,6 +424,10 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     {
         glUniform1f(location, value);        
     }
+    else if constexpr (std::is_same_v<Type, vec2>) 
+    {
+        glUniform3fv(location, 1, (float*)&value);
+    }
     else if constexpr (std::is_same_v<Type, vec3>) 
     {
         glUniform3fv(location, 1, (float*)&value);
@@ -465,27 +471,49 @@ void print_shader_uniforms(GLuint shader_program)
 }
 
 
-// this can maybe generalized later but i don't care for now.
-// uh, i think this is ill-defined for three dimensions. 
-std::vector<vertex_xu> generate_uv_quad_vertex_xu(vec3 min, vec3 max)
-{
-    std::print("{} WARNING: THIS FUNCTION IS NOT REALLY IMPLEMENTED WELL!\n", __func__);
-    std::vector<vertex_xu> uv_quad;
 
-    // Define the four corners of the quad
-    vertex_xu v0 = vertex_xu{.position = vec3{max.x, max.y, max.z}, .uv = vec2{1.0f, 1.0f} }; // Top-right
-    vertex_xu v1 = vertex_xu{.position = vec3{min.x, min.y, min.z}, .uv = vec2{0.0f, 0.0f} }; // Bottom-left
-    vertex_xu v2 = vertex_xu{.position = vec3{max.x, min.y, min.z}, .uv = vec2{1.0f, 0.0f} }; // Bottom-right
-    vertex_xu v3 = vertex_xu{.position = vec3{min.x, max.y, max.z}, .uv = vec2{0.0f, 1.0f} }; // Top-left
 
-    // Define indices for two triangles
-    uv_quad.push_back(v3); // v1
-    uv_quad.push_back(v2); // v2
-    uv_quad.push_back(v1); // v3
+// Function to generate a quad defined by a plane's normal and position
+std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, const vec3& normal, float width, float height) {
+    std::vector<vertex_xu> vertices(6);  // A quad has 6 vertices
 
-    uv_quad.push_back(v2); // v0
-    uv_quad.push_back(v3); // v3
-    uv_quad.push_back(v0); // v2
+    // Calculate two orthogonal vectors (tangent and bitangent) on the plane
+    vec3 tangent, bitangent;
 
-    return uv_quad;
+    // If the normal is too close to the up axis, use a different reference vector
+    vec3 up = vec3{0.0f, 1.0f, 0.0f};
+    if (abs(dot(normal, up)) > 0.99f) {
+        up = vec3{1.0f, 0.0f, 0.0f};  // Use X axis instead if too close to Y
+    }
+
+    tangent = normalize(cross(up, normal));
+    bitangent = normalize(cross(normal, tangent));
+
+    float half_width = width * 0.5f;
+    float half_height = height * 0.5f;
+
+
+
+    // Now calculate the positions of the quad's 4 vertices in world space
+    // Top-left (in local space relative to the center)
+    auto top_left = vertex_xu{.position = center + (-half_width * tangent) + (half_height * bitangent), .uv = vec2{0.0f, 1.0f}};
+
+    // Top-right
+    auto top_right = vertex_xu{.position = center + (half_width * tangent) + (half_height * bitangent), .uv = vec2{1.0f, 1.0f}};
+
+    // Bottom-right
+    auto bottom_right = vertex_xu{.position = center + (half_width * tangent) + (-half_height * bitangent), .uv = vec2{1.0f, 0.0f}};
+
+    // Bottom-left
+    auto bottom_left = vertex_xu{.position = center + (-half_width * tangent) + (-half_height * bitangent),. uv = vec2{0.0f, 0.0f}};
+
+    vertices[0] = top_left;
+    vertices[1] = bottom_right;
+    vertices[2] = top_right; 
+
+    vertices[3] = top_left;
+    vertices[4] = bottom_left;
+    vertices[5] = bottom_right;
+
+    return vertices;
 }

@@ -2,6 +2,8 @@
 #include <SDL3/SDL_main.h>
 #define SDL_MAIN_HANDLED
 
+#include <windows.h>  // error box whatever.
+
 #include <glad/glad.h>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -274,22 +276,101 @@ int main(int argc, char *argv[])
     SDL_GLContext gl_context{};
     {
         SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
+        SDL_Init(SDL_INIT_VIDEO);
+        // set gl attributes        
+        {
+            bool result;
+            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4): {}\n", result);
+            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5): {}\n", result);
+            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE): {}\n", result);
+            result = SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 16);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_RED_SIZE,16): {}\n", result);      // 16 bits for red channel
+            result = SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,16);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,16): {}\n", result);    // 16 bits for green channel
+            result = SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,16);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,16): {}\n", result);     // 16 bits for blue channel
+            result = SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,16);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,16): {}\n", result);    // 16 bits for alpha channel
+            result = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24): {}\n", result);   // 24 bits for depth buffer
+            result = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1): {}\n", result);  // Enable double buffering
+            result = SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+            std::print("SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8): {}\n", result);  // 8 bits for stencil buffer
+        }
 
-        // Enable relative mouse mode and capture the mouse
-        SDL_CaptureMouse(true);
-        SDL_HideCursor();
 
         // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
         window = SDL_CreateWindow(
             "SDL3/OpenGL Demo", window_width, window_height, 
             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-      
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+        if (window == nullptr)
+        {
+            std::print("window is null. SDL_Error: {}\n", SDL_GetError());
+            exit(1);
+        }
+
+        // Enable relative mouse mode and capture the mouse. move the mouse to the center of the window.
+        // note that this does only do anything after the window has been created. (hidecursor. captuermouse, and warpinwindow.)
+        {
+            SDL_CaptureMouse(true);
+            SDL_HideCursor();
+            SDL_WarpMouseInWindow(window, 0.f, 0.f); // xy 
+        }
 
         // Create an OpenGL context associated with the window.
         gl_context = SDL_GL_CreateContext(window);
+
+        // get gl attributes
+        {
+            bool result;
+            int value;
+            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE,&value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,&value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE,&value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER: {}\n", value);
+            result = SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &value);
+            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE failed.\n");
+            std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE: {}\n", value);
+        }
+
         // do some trickery with glad to actually load modern opengl.
         gladLoadGL();
 
@@ -298,7 +379,7 @@ int main(int argc, char *argv[])
 
         // enable vsync
         // std::print("WARNING: vsync is ON.\n");
-        SDL_GL_SetSwapInterval(1);
+        SDL_GL_SetSwapInterval(0);
 
         set_global_gl_settings();
     }    
@@ -340,31 +421,47 @@ int main(int argc, char *argv[])
     // uv grid related.
     auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
     auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
-    auto uv_grid_vertices = generate_uv_quad_vertex_xu(vec3{0.f, 0.0f, 0.f}, vec3{1000.f, 0.0f, 1000.0f});
+    vec2 grid_world_space_dimensions = vec2{1000.f, 1000.f};
+    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, 5000.0f, 5000.0f);
 
-    std::print("uv_grid_vertex_shader_str: {}\n", uv_grid_vertex_shader_str);
-    std::print("uv_grid_fragment_shader_str: {}\n", uv_grid_fragment_shader_str);
     auto uv_grid_shader_program = create_shader_program(
         uv_grid_vertex_shader_str.c_str(),
         uv_grid_fragment_shader_str.c_str()
     );
 
-    print_shader_uniforms(uv_grid_shader_program);
+    if (!uv_grid_shader_program)
+    {
+        int result = MessageBox(NULL, "failed to compile uv grid shader.", "Error", MB_ICONERROR | MB_RETRYCANCEL);
+        if (result == IDCANCEL)
+        {
+            SDL_Quit();
+            return -1;
+        }
+    }
+
 
     set_uniform(uv_grid_shader_program, "grid_spacing", 10.f);
-    set_uniform(uv_grid_shader_program, "line_thickness", 2.0f);
+    set_uniform(uv_grid_shader_program, "line_thickness", 0.5f);
     set_uniform(uv_grid_shader_program, "line_color", vec3{1.0f,1.0f,1.0f});
     set_uniform(uv_grid_shader_program, "background_color", vec3{1.0f,0.0f,0.0f});
+    set_uniform(uv_grid_shader_program, "grid_dimensions", grid_world_space_dimensions);
+
 
     auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
 
+    // shenanigans 
+    bool first_frame = true;
 
 
+    // game loop state
     bool running = true;
     SDL_Event event;
 
     // game state.
     auto camera = Camera{};
+    camera.yaw= -90.f;
+    camera.pitch = 0.f;
+
     float move_speed = 100.0f;
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
@@ -379,7 +476,7 @@ int main(int argc, char *argv[])
     float last_mouse_y{};
     // entity related
     vec3 player_velocity{};
-    vec3 player_position{.0f, 100.f, .0f};
+    vec3 player_position{-6.0320406, 10, 580.2726};
     Move_Input move_input{};
 
     //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
@@ -394,7 +491,12 @@ int main(int argc, char *argv[])
 
          while (SDL_PollEvent(&event))
         {
-            // ignore all events.
+            // ignore all events except quit (alt-f4, pressing x, etc)
+            if (event.type == SDL_EVENT_QUIT)
+            {
+                running = false;  // Break out of the loop to quit the application
+            }
+
         }
 
         // handle keyboard input.
@@ -408,6 +510,13 @@ int main(int argc, char *argv[])
             move_input.left_pressed = key_state[SDL_SCANCODE_A];
             move_input.right_pressed = key_state[SDL_SCANCODE_D];
             move_input.jump_pressed = key_state[SDL_SCANCODE_SPACE];
+
+            if (key_state[SDL_SCANCODE_P])
+            {
+                    std::print("player_position: {}\n", player_position);
+                    std::print("camera.front: {}\n", camera.front);
+                    std::print("camera.pitch: {}\n", camera.pitch);
+            }
 
             // first, update the player position and velocity.
             glm::vec3 right = glm::cross(camera.front, camera.up);
@@ -424,8 +533,6 @@ int main(int argc, char *argv[])
 
             camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
 
-
-
             vec3 position = vec3{player_position.x, player_position.y, player_position.z};
             size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, position, 2.5f);
 
@@ -434,13 +541,14 @@ int main(int argc, char *argv[])
         // handle mouse input. this still seems jerky and is sometimes degenerate, where it locks the y axis. I don't understand why.
         {
             uint32_t mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+
             int dx = mouse_x - last_mouse_x;
             int dy = mouse_y - last_mouse_y;
             camera = look_around(camera, dx, dy, mouse_sensitivity);
         }
 
         // rendering code goes here.
-        glClearColor(0.0f,0.2f,0.0f, 1);
+        glClearColor(0.0f,0.05f,0.0f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
         // aabbs.
@@ -464,6 +572,7 @@ int main(int argc, char *argv[])
             );
 
         SDL_GL_SwapWindow(window);
+
     }
 
 

@@ -10,6 +10,16 @@ struct Camera
     float pitch{0.f};
 };
 
+//formatter specification.
+template <>
+struct std::formatter<Camera> : std::formatter<std::string> {
+    // Format the Camera as a string
+    auto format(const Camera& camera, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "Camera: \n \t position: {},  \n \t front: {} \n \t up: {}, \n \t yaw: {}, \n \t pitch:{}\n", camera.position, camera.front, camera.up, camera.yaw, camera.pitch);
+    }
+};
+
+
 
 //@NOTE(SJORS): this is kind of a free floating camera. this is "mostly" obsolete now that we have player_move, but I will keep it for now.
 inline Camera update_camera(
@@ -52,6 +62,7 @@ inline Camera look_around(const Camera& old_camera, float x_offset, float y_offs
     front.x = cos(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
     front.y = sin(glm::radians(camera.pitch));
     front.z = sin(glm::radians(camera.yaw)) * cos(glm::radians(camera.pitch));
+
     camera.front = glm::normalize(front);
 
     return camera;
