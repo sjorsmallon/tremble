@@ -18,7 +18,6 @@ struct std::formatter<AABB> : std::formatter<std::string> {
     }
 };
 
-
 // some code to parse a file and return a vector of AABB.
 // file should look like: 
 // min: a b c max: x y z

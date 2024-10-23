@@ -410,14 +410,6 @@ int main(int argc, char *argv[])
         bsp = build_bsp(face_indices, aabbs_vertices);
     }
 
-    // grid related.
-    float grid_size    = 1000.0f;
-    float grid_spacing = 10.0f;
-    // to be interpreted as (start, end).
-    auto grid_vertices  = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
-    auto grid_gl_buffer =  create_x_buffer(grid_vertices);
-    
-
     // uv grid related.
     auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
     auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
@@ -439,14 +431,15 @@ int main(int argc, char *argv[])
         }
     }
 
-    // set_uniform(uv_grid_shader_program, "grid_spacing", 10.f);
     set_uniform(uv_grid_shader_program, "line_thickness", 10.0f);
-    // set_uniform(uv_grid_shader_program, "line_color", vec3{1.0f,1.0f,1.0f});
-    // set_uniform(uv_grid_shader_program, "background_color", vec3{1.0f,0.0f,0.0f});
     set_uniform(uv_grid_shader_program, "grid_dimensions", vec2{1000.f, 1000.f});
-
-
     auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
+
+
+    // player related
+    
+
+
 
     // shenanigans 
     bool first_frame = true;

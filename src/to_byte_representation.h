@@ -16,3 +16,13 @@ std::string to_byte_representation(Pod_Type& value)
 
 	return result;
 }
+
+template <Pod Pod_Type>
+std::vector<uint8_t> to_u8_representation(Pod_Type& value)
+{
+	std::vector<uint8_t> result(sizeof(Pod_Type));
+
+	std::memcpy(&result[0], &value, sizeof(Pod_Type));
+
+	return result;
+}

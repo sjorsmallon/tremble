@@ -274,3 +274,12 @@ static void draw_gimble(Camera& camera, GL_Buffer x_arrow_gl_buffer, GL_Buffer y
         bsp = build_bsp(face_indices, mini_aabbs_vertices);
     }
   
+
+
+
+    // grid related.
+    float grid_size    = 1000.0f;
+    float grid_spacing = 10.0f;
+    // to be interpreted as (start, end).
+    auto grid_vertices  = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
+    auto grid_gl_buffer =  create_x_buffer(grid_vertices);

@@ -3,7 +3,7 @@
 #include <print>
 #include <cassert>
 #include "concepts.hpp"
-
+#include "message.h"
 
 constexpr int no_sequence_id = 0;
 
@@ -22,6 +22,7 @@ struct Packet_Header
 	uint8_t sequence_id;
 	uint8_t sequence_count;
 	uint8_t sequence_idx;
+	uint8_t message_type;
 	uint16_t payload_size;
 };
 
@@ -42,14 +43,23 @@ std::vector<Packet> convert_to_packets(const Type& input)
  	if constexpr (Pod<Type>)
  	{
  		std::print("Pod<Type>\n");
-		auto byte_count = sizeof(input);
-		auto packet_count = (1 + ( byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
-		auto packets = std::vector<Packet>{packet_count};
+		size_t byte_count = sizeof(input);
+		size_t packet_count = 0;
+
+		if (byte_count < MAX_BUFFER_SIZE_IN_BYTES) packet_count = 1;
+		else 
+		{
+			packet_count = (1 + ( byte_count - 1) / MAX_BUFFER_SIZE_IN_BYTES); // if x != 0
+
+		}
+		auto packets = std::vector<Packet>(packet_count);
 
 		//FIXME: uh..
 		assert(packet_count < UINT8_MAX);
 
 		uint8_t sequence_id = 1; //FIXME: do something better.
+		if (packet_count == 1) sequence_id = 0;
+		
 		uint8_t packet_idx_in_sequence = 0;
 		for (auto& packet: packets)
 		{
@@ -81,6 +91,8 @@ std::vector<Packet> convert_to_packets(const Type& input)
     	assert(packet_count < UINT8_MAX);
 
 		uint8_t sequence_id = 1; //FIXME: do something better.
+		if (packet_count == 1) sequence_id = 0;
+
 		uint8_t packet_idx_in_sequence = 0;
 
 		// Pack this. if we split up the struct, do not commit to it.
@@ -109,6 +121,18 @@ std::vector<Packet> convert_to_packets(const Type& input)
 
 		return packets;
     }
+}
 
+
+Packet construct_message_only_packet(Message_Type message_type)
+{
+	Packet packet{};
+	packet.header.sequence_id = 0; // sentinel value for no sequence;
+	packet.header.sequence_count = 1;
+	packet.header.sequence_idx = 0;
+	packet.header.message_type = message_type;
+	packet.header.payload_size = 0;
+
+	return packet;
 
 }

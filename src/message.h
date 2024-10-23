@@ -12,7 +12,12 @@ enum Message_Type : uint8_t
 {
 	MESSAGE_JOIN_SERVER,
 	MESSAGE_LEAVE_SERVER,
-	MESSAGE_CHAT_MSG
+	MESSAGE_CHAT_MSG,
+	MESSAGE_ENTITY_DATA,
+	// server messages?
+	MESSAGE_JOIN_SERVER_ACCEPTED,
+	MESSAGE_RECEIVED, // general ack for each packet?
+	MESSAGE_MISSING_PACKET, // send back an index and a sequence?
 };
 
 std::string to_string(Message_Type message_type)

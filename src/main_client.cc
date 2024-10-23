@@ -19,8 +19,6 @@ struct Position
 };
 
 
-
-
 int main(int argc, char* argv[])
 {
     UDPsocket client{};
