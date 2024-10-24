@@ -283,3 +283,100 @@ static void draw_gimble(Camera& camera, GL_Buffer x_arrow_gl_buffer, GL_Buffer y
     // to be interpreted as (start, end).
     auto grid_vertices  = generate_grid_lines_from_plane(vec3{0.0f,0.0f,0.0f}, vec3{0.0f, 1.0f, 0.0f}, grid_size, grid_spacing);
     auto grid_gl_buffer =  create_x_buffer(grid_vertices);
+
+
+
+
+// this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
+static Key to_key(const SDL_Event& event)
+{
+    static constexpr auto mapping = std::initializer_list<std::pair<uint32_t, Key>> {
+        {SDLK_W, Key::KEY_W},
+        {SDLK_ESCAPE, Key::KEY_ESCAPE},
+        {SDLK_A ,Key::KEY_A},
+        {SDLK_S,Key::KEY_S},
+        {SDLK_D,Key::KEY_D},
+        {SDLK_P,Key::KEY_P},
+    };
+
+    for (auto& [key, value]: mapping)
+    {
+        if (key == event.key.key) // key.key???? zowie wowie!
+        {
+            return value;
+        }
+    }
+
+    return Key::KEY_PLACEHOLDER;
+}
+
+static Mouse to_mouse(const SDL_Event& event)
+{
+    return Mouse::MOUSE_PLACEHOLDER;
+}
+
+
+
+// this needs access to camera.
+void handle_keyboard_input(Key key)
+{
+    switch (key)
+    {
+        case Key::KEY_ESCAPE:
+        {
+            std::print("pressed Escape. See you!\n");
+            exit(0);    
+            break;
+        }
+
+        case Key::KEY_PLACEHOLDER:
+        {
+            std::print("pressed key that I do not know.\n");
+            break;
+        }
+
+        // case Key::KEY_W:
+        // {
+        //     break;    
+        // }
+
+
+        // case Key::KEY_A:
+        // {
+        //     break;    
+        // }
+
+
+        // case Key::KEY_S:
+        // {
+        //     break;    
+        // }
+
+        // case Key::KEY_D:
+        // {
+        //     break;    
+        // }
+
+        default:
+        {
+            // std::print("unreachable.\n");
+            break;            
+        }
+    }
+}
+
+
+
+// Macro to time a block of code or function call, and print function name
+#define TIMED_FUNCTION(code_block) \
+do { \
+    Uint64 start = SDL_GetPerformanceCounter(); \
+    code_block; \
+    Uint64 end = SDL_GetPerformanceCounter(); \
+    double elapsed_in_ms = (end - start) * 1000.0 / SDL_GetPerformanceFrequency(); \
+    std::print("Function '{}' took: {} ms\n", __func__, elapsed_in_ms); \
+} while(0)
+
+// timing related
+size_t current_timing_idx = 0;
+auto timings = std::array<double, 1024>{};

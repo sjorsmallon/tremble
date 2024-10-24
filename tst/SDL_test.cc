@@ -22,92 +22,7 @@
 #include "../src/bsp.hpp"
 #include "../src/player_move.hpp"
 
-// Macro to time a block of code or function call, and print function name
-#define TIMED_FUNCTION(code_block) \
-do { \
-    Uint64 start = SDL_GetPerformanceCounter(); \
-    code_block; \
-    Uint64 end = SDL_GetPerformanceCounter(); \
-    double elapsed_in_ms = (end - start) * 1000.0 / SDL_GetPerformanceFrequency(); \
-    std::print("Function '{}' took: {} ms\n", __func__, elapsed_in_ms); \
-} while(0)
 
-
-// this is to abstract from SDL keypresses but it is kind of ugly actually (the pavel trick.)
-static Key to_key(const SDL_Event& event)
-{
-    static constexpr auto mapping = std::initializer_list<std::pair<uint32_t, Key>> {
-        {SDLK_W, Key::KEY_W},
-        {SDLK_ESCAPE, Key::KEY_ESCAPE},
-        {SDLK_A ,Key::KEY_A},
-        {SDLK_S,Key::KEY_S},
-        {SDLK_D,Key::KEY_D},
-        {SDLK_P,Key::KEY_P},
-    };
-
-    for (auto& [key, value]: mapping)
-    {
-        if (key == event.key.key) // key.key???? zowie wowie!
-        {
-            return value;
-        }
-    }
-
-    return Key::KEY_PLACEHOLDER;
-}
-
-static Mouse to_mouse(const SDL_Event& event)
-{
-    return Mouse::MOUSE_PLACEHOLDER;
-}
-
-// this needs access to camera.
-void handle_keyboard_input(Key key)
-{
-    switch (key)
-    {
-        case Key::KEY_ESCAPE:
-        {
-            std::print("pressed Escape. See you!\n");
-            exit(0);    
-            break;
-        }
-
-        case Key::KEY_PLACEHOLDER:
-        {
-            std::print("pressed key that I do not know.\n");
-            break;
-        }
-
-        // case Key::KEY_W:
-        // {
-        //     break;    
-        // }
-
-
-        // case Key::KEY_A:
-        // {
-        //     break;    
-        // }
-
-
-        // case Key::KEY_S:
-        // {
-        //     break;    
-        // }
-
-        // case Key::KEY_D:
-        // {
-        //     break;    
-        // }
-
-        default:
-        {
-            // std::print("unreachable.\n");
-            break;            
-        }
-    }
-}
 
 // there is a better abstraction here that will come later.
 static void draw_triangles(
@@ -388,10 +303,6 @@ int main(int argc, char *argv[])
     uint32_t x_shader_program = create_x_shader_program();
 
 
-    // timing related
-    size_t current_timing_idx = 0;
-    auto timings = std::array<double, 1024>{};
-
     // base AABB.
     auto path = std::string{"../data/list_of_AABB"};
     auto aabbs = read_AABBs_from_file(path);
@@ -414,7 +325,7 @@ int main(int argc, char *argv[])
     auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
     auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
     vec2 grid_world_space_dimensions = vec2{1000.f, 1000.f};
-    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, 1000.0f, 1000.0f);
+    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, grid_world_space_dimensions.x, grid_world_space_dimensions.y);
 
     auto uv_grid_shader_program = create_shader_program(
         uv_grid_vertex_shader_str.c_str(),
@@ -432,12 +343,8 @@ int main(int argc, char *argv[])
     }
 
     set_uniform(uv_grid_shader_program, "line_thickness", 10.0f);
-    set_uniform(uv_grid_shader_program, "grid_dimensions", vec2{1000.f, 1000.f});
+    set_uniform(uv_grid_shader_program, "grid_dimensions", grid_world_space_dimensions);
     auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
-
-
-    // shenanigans 
-    bool first_frame = true;
 
 
     // game loop state
@@ -469,10 +376,10 @@ int main(int argc, char *argv[])
 
     size_t previous_closest_face_idx = -1;
     vec4 previous_face_color{0.0f,0.0f,0.0f, 1.0f};
-    //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
     while (running)
     {
          last = now;
+         //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
          now = SDL_GetPerformanceCounter();
          dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
 
@@ -491,9 +398,7 @@ int main(int argc, char *argv[])
             {
                 if ((event.key.key == SDLK_TILDE) || (event.key.key == SDLK_GRAVE))
                 {
-                   
-                    // toggle_noclip();
-
+                    // toggle noclip.                   
                     noclip = 1 - noclip;
                     std::print("noclip status: {}\n", (noclip ? "on" : "off"));
                 }
@@ -520,16 +425,15 @@ int main(int argc, char *argv[])
                     std::print("camera.pitch: {}\n", camera.pitch);
             }
 
-
             // collide at the old position.
             size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, player_position, 11.f);
+
             // color that one white.
             if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
             {  
 
                 if (previous_closest_face_idx != -1)
                 {
-                    std::print("restoring the previous.");
                     // restore the previous colors.
                     GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
                     std::array<vertex_xnc, 3> previous_closest_face{};
@@ -537,7 +441,6 @@ int main(int argc, char *argv[])
                     previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
                     previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
 
-                    std::print("previous_face_color: {}\n", previous_face_color);
                     previous_closest_face[0].color = previous_face_color;
                     previous_closest_face[1].color = previous_face_color;
                     previous_closest_face[2].color = previous_face_color;
@@ -549,7 +452,6 @@ int main(int argc, char *argv[])
                     glBindVertexArray(0);
                 }
 
-                std::print("closest face found.\n");
                 glBindVertexArray(aabb_gl_buffer.VAO); 
                 glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
 
