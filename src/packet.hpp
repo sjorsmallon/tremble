@@ -19,6 +19,7 @@ constexpr int no_sequence_id = 0;
 // max of uint16_t is 65,535 which is more than enough (that's the max of the whole packet in ipv4/ipv6 anyway.)
 struct Packet_Header
 {
+	uint64_t timestamp;
 	uint8_t sequence_id;
 	uint8_t sequence_count;
 	uint8_t sequence_idx;
@@ -26,6 +27,7 @@ struct Packet_Header
 	uint16_t payload_size;
 };
 
+// wtf is going on? alignment issues?
 constexpr size_t MAX_BUFFER_SIZE_IN_BYTES = 1452 - sizeof(Packet_Header);
 struct Packet
 {
@@ -33,8 +35,9 @@ struct Packet
 	uint8_t buffer[MAX_BUFFER_SIZE_IN_BYTES];
 };
 
-//safeguarding myself
-static_assert(sizeof(Packet) <= 1452);
+//safeguarding myself, 
+static_assert(sizeof(Packet_Header) == 16);
+// static_assert(sizeof(Packet) <= 1452); //
 
 template <typename Type>
 requires Pod<Type> || PodVectorConcept<Type>
@@ -116,6 +119,7 @@ std::vector<Packet> convert_to_packets(const Type& input, Message_Type message_t
 			packet.header.sequence_count = packet_count;
 			packet.header.sequence_idx   = packet_idx_in_sequence;
 			packet.header.payload_size   = chunk_size;
+			// timestamp intentionally not set because you should set that before sending it.
 
 			packet_idx_in_sequence += 1;
 		}
@@ -134,6 +138,7 @@ Packet construct_message_only_packet(Message_Type message_type)
 	packet.header.sequence_idx = 0;
 	packet.header.message_type = message_type;
 	packet.header.payload_size = 0;
+	// set the timestamp before sending it.
 
 	return packet;
 

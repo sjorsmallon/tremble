@@ -1,10 +1,10 @@
 #include "../src/concepts.hpp"
 #include "../src/udp_socket.h"
-#include "../src/server_config.hpp"
 
 #include <print>
 #include <cassert>
 #include <thread>
+#include <chrono>
 
 struct Position
 {
@@ -12,6 +12,8 @@ struct Position
 	float y;
 	float z;
 };
+
+constexpr auto port_number = 2020;
 
 
 int main()
@@ -35,7 +37,7 @@ int main()
 
         for (auto& packet: packets)
         {
-            if (client.send(packet, UDPsocket::IPv4::Broadcast(global::port_number)) < 0)
+            if (client.send(packet, UDPsocket::IPv4::Broadcast(port_number)) < 0)
             {
                 std::print("send(): failed (REQ)\n");
             }
@@ -43,7 +45,7 @@ int main()
             {
                 std::print("send message succeeded.\n");
             }
-            std::this_thread::sleep_for(200ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
    		client.close();
 	 });
@@ -56,9 +58,9 @@ int main()
 	{
 		UDPsocket server_socket{};
 		server_socket.open();
-		server_socket.bind(global::port_number);
+		server_socket.bind(port_number);
 
-		std::print("server open and bound on port {}\n", global::port_number);
+		std::print("server open and bound on port {}\n", port_number);
 
 		// the t1_buffer will be the reconstructed contiguous representation of the messages.
 		// this means that if messages arrive OoO, we will have segments of the t1_buffer

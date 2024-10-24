@@ -11,9 +11,11 @@ struct AABB
 
 // Define formatter specialization for AABB (THE CONST AFTER THE MEMBER FN IS NEEDED BECAUSE OTHERWISE YOU GET 14000000 LINES OF TEMPLATE ERRORS)
 template <>
-struct std::formatter<AABB> : std::formatter<std::string> {
+struct std::formatter<AABB> : std::formatter<std::string>
+{
     // Format the AABB as a string
-    auto format(const AABB& aabb, std::format_context& ctx) const {
+    auto format(const AABB& aabb, std::format_context& ctx) const
+    {
         return std::format_to(ctx.out(), "AABB(min: {}, max: {})", aabb.min, aabb.max);
     }
 };
@@ -32,12 +34,14 @@ struct std::formatter<AABB> : std::formatter<std::string> {
 std::vector<std::string> split_string(const std::string& str, char delimiter)
 {
     std::vector<std::string> tokens;
-    std::stringstream ss(str);  // Turn the string into a stream
+    std::stringstream ss(str);  
     std::string token;
 
-    // Extract tokens split by the delimiter
-    while (std::getline(ss, token, delimiter)) {
-        if (!token.empty()) {  // Skip empty tokens (if any)
+    
+    while (std::getline(ss, token, delimiter))
+    {
+        if (!token.empty()) 
+        {  
             tokens.push_back(token);
         }
     }
@@ -85,8 +89,8 @@ inline std::vector<AABB> read_AABBs_from_file(std::string& filename)
     auto line = std::string{};
     while (std::getline(file, line))
     {
-        if (line.empty()) continue;  // Skip empty lines
-        if (line.starts_with('#')) continue; // skip comments
+        if (line.empty()) continue;  
+        if (line.starts_with('#')) continue;
         aabbs.push_back(parse_line_to_aabb(line));
     }
 
@@ -143,7 +147,6 @@ std::vector<AABB> generate_non_overlapping_aabbs(int num_aabbs, const vec3& exte
 
     return aabbs;
 }
-
 
 
 #include "vertex.hpp"

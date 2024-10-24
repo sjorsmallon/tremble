@@ -1,4 +1,4 @@
-
+    
 using namespace std::literals;
 struct vec3f_t
 {

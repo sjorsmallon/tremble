@@ -22,6 +22,7 @@ struct std::formatter<Camera> : std::formatter<std::string> {
 
 
 //@NOTE(SJORS): this is kind of a free floating camera. this is "mostly" obsolete now that we have player_move, but I will keep it for now.
+// this is used in 'noclip' mode.
 inline Camera update_camera(
 	const Camera& old_camera,
 	float dt,

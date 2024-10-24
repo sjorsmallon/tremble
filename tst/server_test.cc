@@ -16,30 +16,10 @@ using namespace std::literals;
 
 static_assert(sizeof(Message_Type) == sizeof(uint8_t));
 
-// global state that I do not know where to keep other than here for now.
-inline void process_message(Packet& packet, std::vector<uint8_t> buffer)
-{
-	switch(packet.header.message_type)
-	{
-		case MESSAGE_JOIN_SERVER :
-		{
-			break;
-		}
-		case MESSAGE_LEAVE_SERVER :
-		{
-			break;
-		}
-		case MESSAGE_ENTITY_DATA:
-		{
-			break;
-		}
-	}
-
-}
-
 constexpr auto sv_max_player_count = 32;
 constexpr auto server_port_number = 2020;
 constexpr auto client_port_number = 2024;
+
 
 
 struct Byte_Buffer
@@ -77,7 +57,13 @@ inline Byte_Buffer* get_player_byte_buffer_from_ip(Server_Connection_State& serv
 	return nullptr;
 }
 
-
+#include <chrono>
+inline uint64_t get_timestamp_microseconds()
+{
+    auto now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+}
 
 //@Note: this is mostly incomplete, and just me thinking about what this should look like.
 // each  "player" has a scratchpad buffer, in which packets are stitched together into their original message.
@@ -148,6 +134,9 @@ int main()
 
 							//@FIXME: wait for one second so the message does not get lost.
 							std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+							packet.header.timestamp = get_timestamp_microseconds();
+
 							server_socket.send(join_server_accepted_packet, UDPsocket::IPv4::Broadcast(client_port_number));
 							break;
 						}
@@ -215,6 +204,7 @@ int main()
 		std::print("[client] done sleeping.\n");
 
 		Packet packet = construct_message_only_packet(MESSAGE_JOIN_SERVER);
+		packet.header.timestamp = get_timestamp_microseconds();
 		client_socket.send(packet, UDPsocket::IPv4::Broadcast(server_port_number));
 		std::print("[client] sent join_server message.\n");
 		
@@ -279,12 +269,3 @@ int main()
 
 }
 
-
-// std::tuple<vec3, vec3> my_walk_move(
-// 	Move_Input& input,
-//     const vec3 old_position,
-//     const vec3 old_velocity,
-//     const vec3 front,
-//     const vec3 right,
-//     const float dt)
-// {

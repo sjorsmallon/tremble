@@ -436,16 +436,12 @@ int main(int argc, char *argv[])
     auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
 
 
-    // player related
-    
-
-
-
     // shenanigans 
     bool first_frame = true;
 
 
     // game loop state
+    bool noclip = false;
     bool running = true;
     SDL_Event event;
 
@@ -471,6 +467,8 @@ int main(int argc, char *argv[])
     vec3 player_position{-6.0320406, 10, 580.2726};
     Move_Input move_input{};
 
+    size_t previous_closest_face_idx = -1;
+    vec4 previous_face_color{0.0f,0.0f,0.0f, 1.0f};
     //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
     while (running)
     {
@@ -487,6 +485,18 @@ int main(int argc, char *argv[])
             if (event.type == SDL_EVENT_QUIT)
             {
                 running = false;  // Break out of the loop to quit the application
+            }
+
+            if (event.type == SDL_EVENT_KEY_UP)
+            {
+                if ((event.key.key == SDLK_TILDE) || (event.key.key == SDLK_GRAVE))
+                {
+                   
+                    // toggle_noclip();
+
+                    noclip = 1 - noclip;
+                    std::print("noclip status: {}\n", (noclip ? "on" : "off"));
+                }
             }
 
         }
@@ -510,23 +520,86 @@ int main(int argc, char *argv[])
                     std::print("camera.pitch: {}\n", camera.pitch);
             }
 
-            // first, update the player position and velocity.
-            glm::vec3 right = glm::cross(camera.front, camera.up);
-            auto [new_position, new_velocity] = my_walk_move(
-                move_input,
-                player_position,
-                player_velocity,
-                vec3{camera.front.x, camera.front.y, camera.front.z},
-                vec3{right.x, right.y, right.z},
-                dt);
 
-            player_position = new_position;
-            player_velocity = new_velocity;
+            // collide at the old position.
+            size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, player_position, 11.f);
+            // color that one white.
+            if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
+            {  
 
-            camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
+                if (previous_closest_face_idx != -1)
+                {
+                    std::print("restoring the previous.");
+                    // restore the previous colors.
+                    GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
+                    std::array<vertex_xnc, 3> previous_closest_face{};
+                    previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
+                    previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
+                    previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
 
-            vec3 position = vec3{player_position.x, player_position.y, player_position.z};
-            size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, position, 2.5f);
+                    std::print("previous_face_color: {}\n", previous_face_color);
+                    previous_closest_face[0].color = previous_face_color;
+                    previous_closest_face[1].color = previous_face_color;
+                    previous_closest_face[2].color = previous_face_color;
+
+                    GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // Size of the new data
+                    glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
+
+                    glBindBuffer(GL_ARRAY_BUFFER, 0);
+                    glBindVertexArray(0);
+                }
+
+                std::print("closest face found.\n");
+                glBindVertexArray(aabb_gl_buffer.VAO); 
+                glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+
+                GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
+                std::array<vertex_xnc, 3> closest_face{};
+                closest_face[0] = aabbs_vertices[closest_face_idx];
+                closest_face[1] = aabbs_vertices[closest_face_idx + 1];
+                closest_face[2] = aabbs_vertices[closest_face_idx + 2];
+                vec4 face_color = closest_face[0].color;
+                // store this color so we can restore it
+                closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+
+                GLsizeiptr size = 3 * sizeof(vertex_xnc); // Size of the new data
+                glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
+                previous_closest_face_idx = closest_face_idx;
+                previous_face_color = face_color;
+
+            }
+
+            if (!noclip)
+            {
+                // first, update the player position and velocity.
+                glm::vec3 right = glm::cross(camera.front, camera.up);
+                auto [new_position, new_velocity] = my_walk_move(
+                    move_input,
+                    player_position,
+                    player_velocity,
+                    vec3{camera.front.x, camera.front.y, camera.front.z},
+                    vec3{right.x, right.y, right.z},
+                    dt);
+
+                player_position = new_position;
+                player_velocity = new_velocity;
+
+                camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
+            }
+            else
+            {
+                camera = update_camera(camera, dt,
+                    move_input.forward_pressed,
+                    move_input.left_pressed,
+                    move_input.backward_pressed,
+                    move_input.right_pressed,
+                    move_speed);
+                player_position = vec3{camera.position.x, camera.position.y, camera.position.z};
+            }
+
+
 
         }
 
