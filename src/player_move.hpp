@@ -2,6 +2,15 @@
 #include <print>
 
 
+/// this should also not be here but it is for now.
+struct Trace
+{
+    bool collided;
+    vec3 face_normal;
+};
+
+
+
 //@Note: this move input is serialized and sent across the wire. I don't think that this is the correct place to define it.
 // but I will leave it here for now.
 struct Move_Input 
@@ -57,7 +66,7 @@ vec3 accelerate(vec3 new_velocity, vec3 wish_direction, float wish_speed, float 
 }   
 
 [[nodiscard]]
-std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_velocity, const bool player_is_airborne, const float dt)
+std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_velocity, const bool player_is_airborne, const Trace& trace, const float dt)
 {
     constexpr auto pm_maxspeed = 320.f; //@VOLATILE: also in my move.
 	constexpr auto g_gravity = 800.f;
@@ -85,10 +94,11 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
     vec3 position = old_position + (new_velocity * dt);
 
     // test if we can actually be at the new position (collide with the environment and push back). for now, we take this to be y = 10.f;
-    if (position.y < 10.0f)
+    // @FIXME: we need to perform a new trace here to prevent tunneling / getting stuck in the ground. 
+    // did we collide with a trace, but are we moving down?
+    if (trace.collided && new_velocity.y < 0.f)
     {
-        std::print("snapping to floor.\n");
-        position.y = 10.f;
+        std::print("snapping to floor (setting y velocity to 0.\n");
         new_velocity.y = 0.f;
     }
 
@@ -183,8 +193,32 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 
 // it is too complex for me to think about. retry.
 // new position, new_new_velocity.
+// additionally, we cannot really do "grounded" in this function if we expect this to be invoked by different people at different times.
+
+// std::tuple<vec3, vec3> move(
+//     Move_Input& input,
+//     const vec3 old_position,
+//     const vec3 old_velocity,
+//     const vec3 front,
+//     const vec3 right,
+//     const float dt)
+// {
+//     auto grounded = ground_trace();
+//     if (grounded)
+//     {
+//         walk_move();
+//     }
+//     else
+//     {
+//         air_move();
+//     }
+
+// }
+
+
 std::tuple<vec3, vec3> my_walk_move(
 	Move_Input& input,
+    const Trace& trace,
     const vec3 old_position,
     const vec3 old_velocity,
     const vec3 front,
@@ -200,10 +234,11 @@ std::tuple<vec3, vec3> my_walk_move(
 	constexpr auto pm_overbounce = 1.001f;
     constexpr auto pm_movement_treshold = 0.00001f; //minimum necessary movement in either axis.
     constexpr auto pm_jumpspeed = 270.f;
-    constexpr  auto g_gravity = 800.f; //@VOLATILE: also fix in slide_move.
+    constexpr auto g_gravity = 800.f; //@VOLATILE: also fix in slide_move.
 
     bool jump_pressed_this_frame = check_jump(input);
-    if (jump_pressed_this_frame)
+
+    if (jump_pressed_this_frame) //is this is what is causing issues?
     {
         grounded = false;
     }
@@ -225,18 +260,20 @@ std::tuple<vec3, vec3> my_walk_move(
     // imagine it is steep, like an incline. we do not want to move inside of that, but move smoothly
     // perpendicular to that normal. so we "clip" the velocity vector such that we redirect it along that perpendicular axis.
 	// for now, no inclines. just flat surfaces. so the normal is always {0.0f, 1.0f, 0.0f};
-	vec3 ground_face_normal{0.0f,1.0f, 0.0f};
 
-	vec3 front_clipped = clip_vector(front_without_y, ground_face_normal, pm_overbounce);
-	vec3 right_clipped = clip_vector(right_without_y, ground_face_normal, pm_overbounce);
-
-
+    vec3 front_clipped = front_without_y;
+    vec3 right_clipped = right_without_y;
+    
+    if (trace.collided)
+    {
+        front_clipped = clip_vector(front_without_y, trace.face_normal, pm_overbounce);
+        right_clipped = clip_vector(right_without_y, trace.face_normal, pm_overbounce);
+    }
 
  	bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
                            input.left_pressed     ||
                            input.right_pressed);
-
 
 	// what is the resulting direction we should take, based on the new clipped front and right (accounting for the walls we might be colliding with),
 	// and what buttons I pressed in relation to those vectors.
@@ -269,10 +306,10 @@ std::tuple<vec3, vec3> my_walk_move(
 
     // clip the new velocity it against the ground plane. take the length before it is clipped.
     float new_speed  = length(new_velocity);
-    new_velocity = clip_vector(new_velocity, ground_face_normal, pm_overbounce);
+    new_velocity = clip_vector(new_velocity, trace.face_normal, pm_overbounce);
     
 
-    bool player_is_airborne = (old_position.y > 10.0f);
+    bool player_is_airborne = !trace.collided; 
     if (!player_is_airborne) grounded = true;
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
@@ -330,17 +367,18 @@ std::tuple<vec3, vec3> my_walk_move(
         grounded = true;
     }
 
-
     // just before step_slide-move, reassign the y velocity (that has not been touched up until now.)
     new_velocity.y = old_velocity.y;
 
     // we are missing where to inject the jump. so let me just do that here.
     // a jump is not a velocity, but just a "set speed" for one particular frame, that
     // gets removed over time with gravity.
-    if (jump_pressed_this_frame && !player_is_airborne)
+    if (jump_pressed_this_frame && !player_is_airborne && grounded)
     {
+        std::print ("induced jump speed.\n");
         new_velocity.y = (pm_jumpspeed * input_scale);
+        grounded = false;
     }
 
-    return step_slide_move(old_position, new_velocity, player_is_airborne, dt);
+    return step_slide_move(old_position, new_velocity, player_is_airborne, trace, dt);
 }

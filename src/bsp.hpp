@@ -1,7 +1,7 @@
 #pragma once
 #include "vec.hpp"
 #include <cfloat> // FLT_MAX
-
+#include <cmath>
 
 // move to math 
 size_t abs(size_t a, size_t b) {
@@ -37,13 +37,12 @@ struct BSP
 	uint64_t face_idx; // keep the face data in a contiguous array outside of the bsp, but refer to the "face_idx" so we know what we are talking about.
 };
 
+// partition result is "where do we put this face?"
 Partition_Result get_partition_result(Plane& plane, const vec3& v0, const vec3& v1, const vec3& v2)
 {
     float d0 = dot(plane.normal, v0 - plane.point);
     float d1 = dot(plane.normal, v1 - plane.point);
     float d2 = dot(plane.normal, v2 - plane.point);
-
-    // std::print("d0, d1, d2: {}, {}, {}\n", d0, d1, d2);
 
     // check the signs of the distances
     bool is_v0_front = (d0 > 0.f);
@@ -62,38 +61,31 @@ Partition_Result get_partition_result(Plane& plane, const vec3& v0, const vec3& 
     }
     else
     {
-        return Partition_Result::STRADDLING; // The triangle straddles the plane
+        return Partition_Result::STRADDLING; // The face straddles the plane
     }
 }
 
-
-
-// move to math.
+// move to math. Thank you, Christer Ericcson. I owe you one.
 bool is_point_in_triangle(const vec3& point, const vec3& v0, const vec3& v1, const vec3& v2)
 {
-    // compute vectors from point to triangle vertices
-    vec3 v0_to_point = point - v0;
-    vec3 v1_to_point = point - v1;
-    vec3 v2_to_point = point - v2;
+    // translate point and triangle so that point lies at origin
+    vec3 a = v0 - point;
+    vec3 b = v1 - point;
+    vec3 c = v2 - point;
 
-    // compute edge vectors
-    vec3 edge0 = v1 - v0;
-    vec3 edge1 = v2 - v1;
-    vec3 edge2 = v0 - v2;
+    // compute normal vectors for triangles pab and pbc.
+    vec3 u = cross(b, c);
+    vec3 v = cross(c, a);
 
-    // compute cross products between edge vectors and vectors to the point
-    vec3 cross0 = cross(edge0, v0_to_point);
-    vec3 cross1 = cross(edge1, v1_to_point);
-    vec3 cross2 = cross(edge2, v2_to_point);
+    // make sure they are ponting in the same direction.
+    if (dot(u, v) < 0.0f) return false;
 
-    // check if the cross products point in the same direction (same sign of dot products)
-    if (dot(cross0, cross1) < 0 || dot(cross1, cross2) < 0)
-    {
-        // Point is outside the triangle
-        return false;
-    }
+    // compute normal vector for triangle pca
+    vec3 w = cross(a, b);
+    // make sure it points in the same direction as the first two
+    if (dot(u, w) < 0.0f) return false;
+    // otehrwise p must be in (or on) the triangle
 
-    // Point is inside the triangle
     return true;
 }
 
@@ -170,7 +162,6 @@ float point_to_triangle_distance(const vec3& p, const vec3& v0, const vec3& v1, 
         dist_to_edge2
     });
 }
-
 
 //@Memory: we never free this
 //@Speed: Quadratic behavior! for all planes, for all other planes. or is it log?
@@ -262,7 +253,7 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 
 // the bsp should also have a pointer to the buffer it is based on, I guess?
 // FIXME: cleaner would be std::pair<bool found, size_t index>.
-inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc>& all_faces_buffer, vec3& position, float distance_treshold)
+inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc>& all_faces_buffer,const vec3& position, float distance_treshold)
 {
 	const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
 
@@ -307,6 +298,74 @@ inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc
 
     // Check the second branch. 
     return find_closest_proximity_face_index(second_branch, all_faces_buffer, position, distance_treshold);
+}
+
+
+
+
+
+
+inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, std::vector<vertex_xnc>& all_faces_buffer, const vec3& position, const vec3& world_axis, float distance_treshold)
+{
+    // any angle that is between 0 and 80 degrees from up is a floor.
+    constexpr auto pm_floor_angle_treshold_deg = 80.f;
+
+    const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
+
+    if (bsp == nullptr)
+    {
+        return SENTINEL_FACE_IDX_NOT_FOUND;
+    }
+
+    auto& v0 = all_faces_buffer[bsp->face_idx].position;
+    auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
+    auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
+
+    // how close are we actually? if we are in the plane described by the triangle, or even if we are not.
+    float distance = point_to_triangle_distance(position, v0, v1, v2);
+    // ok, this is close enough.
+    if (distance < distance_treshold)
+    {
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        //  calculate the angle w.r.t the world angle.
+        auto dot_product=  dot(face_normal_at_v0, world_axis);
+        float floor_angle = acos(dot_product);
+        if (fabs(dot_product) < 0.000001f)//@FIXME: formalize this. if the up vector and the wall vector are orthogonal, the dot product is zero and we are just dealing with noise.
+        {
+            // do nothing.
+        }
+        else if (floor_angle < pm_floor_angle_treshold_deg && floor_angle > -pm_floor_angle_treshold_deg)
+        {
+            return bsp->face_idx;
+        }
+    }
+
+    BSP* first_branch = nullptr;
+    BSP* second_branch = nullptr;
+
+    // behind. start exhausting the back planes first.
+    if (distance < 0.0f)
+    {
+        first_branch = bsp->back;
+        second_branch = bsp->front;
+    }
+    else // in front. start exhausting the front planes first.
+    {
+        first_branch = bsp->front;
+        second_branch = bsp->back;
+    }
+
+    size_t first_face_index = find_closest_proximity_face_index_with_world_axis(first_branch, all_faces_buffer, position, world_axis, distance_treshold);
+    if (first_face_index != SENTINEL_FACE_IDX_NOT_FOUND)
+    {
+        return first_face_index;
+    }
+
+    // Check the second branch. 
+    return find_closest_proximity_face_index_with_world_axis(second_branch, all_faces_buffer, position, world_axis, distance_treshold);
 }
 
 

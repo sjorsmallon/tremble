@@ -1,5 +1,6 @@
 #pragma once
 
+// gaffer on games stuff. this is currently not used.
 
 constexpr int MAX_CLIENTS = 64;
 
@@ -35,7 +36,7 @@ int find_existing_client_idx(Server& server, Address& address)
     return -1; // sentinel value
 }
 
-bool is_client_conntect(Server& server, int client_idx)
+bool is_client_connect(Server& server, int client_idx)
 {
     return server.client_connected[client_idx];
 }
@@ -44,6 +45,10 @@ Address& Server::get_client_address(Server& server, int client_idx)
 {
     return server.client_addresses[client_idx];
 }
+
+
+
+
 
 enum CONNECTION: uint8_t
 {

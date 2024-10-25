@@ -240,9 +240,11 @@ int main()
 				std::vector<Packet> packets = convert_to_packets(move_input, MESSAGE_PLAYER_INPUT);
 				assert(packets.size() == 1);	
 
+				Trace trace{};
 				// simulate
 				auto [new_player_position, new_player_velocity] = my_walk_move(
 					move_input,
+					trace,
 					player_position,
 					player_velocity,
 					front,

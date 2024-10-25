@@ -65,6 +65,11 @@ struct vec3
         };
     };
 
+    operator glm::vec3() const
+    {
+        return *reinterpret_cast<const glm::vec3*>(this);
+    }
+
 
     vec3 operator+(const vec3& other) const
     {
@@ -95,8 +100,11 @@ struct vec3
     {
         return vec3{v.x * scalar, v.y * scalar, v.z * scalar};
     }
-
 };
+
+// safeguard for some typecasting
+static_assert(sizeof(vec3) == sizeof(glm::vec3));
+
 
 inline float length(const vec3& v)
 {
@@ -109,7 +117,6 @@ inline float length_squared(const vec3& v)
 {
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
-
 
 
 inline float distance_between(const vec3& a, const vec3& b)
@@ -188,8 +195,6 @@ inline float dot(const vec3& v1, const vec3& v2)
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
-// safeguard for some typecasting
-static_assert(sizeof(vec3) == sizeof(glm::vec3));
 
 
 

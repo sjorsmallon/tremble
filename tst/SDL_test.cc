@@ -11,7 +11,6 @@
 #include <glm/glm.hpp>
 
 #include <print>
-#include <numeric> // std::accumulate
 #include <array>
 
 #include "../src/input.hpp"
@@ -21,8 +20,6 @@
 #include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
 #include "../src/player_move.hpp"
-
-
 
 // there is a better abstraction here that will come later.
 static void draw_triangles(
@@ -357,7 +354,7 @@ int main(int argc, char *argv[])
     camera.yaw= -90.f;
     camera.pitch = 0.f;
 
-    float move_speed = 100.0f;
+    float noclip_move_speed = 500.0f;
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
     float near_z = 0.1f;
@@ -369,22 +366,35 @@ int main(int argc, char *argv[])
     float mouse_y{};
     float last_mouse_x{};
     float last_mouse_y{};
+
     // entity related
     vec3 player_velocity{};
     vec3 player_position{-6.0320406, 10, 580.2726};
+    auto player_aabb = AABB{.min = vec3{-5.0f, 0.0f, 0.0f}, .max = {5.0f, 20.f, 10.f}};
     Move_Input move_input{};
+    Trace trace{};
 
+    // coloring the bsp found things
     size_t previous_closest_face_idx = -1;
     vec4 previous_face_color{0.0f,0.0f,0.0f, 1.0f};
+
+    // draw the player collision aabb in front of us.
+    auto player_aabb_vertices = to_vertex_xnc(player_aabb);
+    auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
+
     while (running)
     {
-         last = now;
-         //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
-         now = SDL_GetPerformanceCounter();
-         dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
+        // reset trace.
+        trace.collided = false;
+        trace.face_normal = vec3{0.0f, 0.0f, 0.0f};
 
-         last_mouse_x = mouse_x;
-         last_mouse_y = mouse_y;
+        last = now;
+        //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
+        now = SDL_GetPerformanceCounter();
+        dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
+
+        last_mouse_x = mouse_x;
+        last_mouse_y = mouse_y;
 
          while (SDL_PollEvent(&event))
         {
@@ -401,6 +411,10 @@ int main(int argc, char *argv[])
                     // toggle noclip.                   
                     noclip = 1 - noclip;
                     std::print("noclip status: {}\n", (noclip ? "on" : "off"));
+                    // set the player velocity in the camera viewing direction.
+                    glm::vec3 vel = camera.front * noclip_move_speed;
+                    player_velocity = vec3{vel.x, vel.y, vel.z}; 
+
                 }
             }
 
@@ -425,52 +439,76 @@ int main(int argc, char *argv[])
                     std::print("camera.pitch: {}\n", camera.pitch);
             }
 
-            // collide at the old position.
-            size_t closest_face_idx = find_closest_proximity_face_index(bsp, aabbs_vertices, player_position, 11.f);
+            // collision detection.
+            {
+                 // collide at the old position.
+                // just do "floor" collision.
+                vec3 world_up{0.0f,1.0f,0.0f};
+                size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, world_up, 10.f);
 
-            // color that one white.
-            if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
-            {  
-
-                if (previous_closest_face_idx != -1)
+                // set trace information
+                if (closest_face_idx != -1)
                 {
-                    // restore the previous colors.
-                    GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
-                    std::array<vertex_xnc, 3> previous_closest_face{};
-                    previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
-                    previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
-                    previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
+                    auto& v0 = aabbs_vertices[closest_face_idx].position;
+                    auto& v1 = aabbs_vertices[closest_face_idx + 1].position;
+                    auto& v2 = aabbs_vertices[closest_face_idx + 2].position;
+                    vec3 e0 =  normalize(v1 - v0);
+                    vec3 e1 =  normalize(v2 - v0);
+                    vec3 face_normal_at_v0 = normalize(cross(e0, e1));
 
-                    previous_closest_face[0].color = previous_face_color;
-                    previous_closest_face[1].color = previous_face_color;
-                    previous_closest_face[2].color = previous_face_color;
-
-                    GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // Size of the new data
-                    glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
-
-                    glBindBuffer(GL_ARRAY_BUFFER, 0);
-                    glBindVertexArray(0);
+                    trace.collided = true;
+                    trace.face_normal = face_normal_at_v0; 
+                }
+                else
+                {
+                    trace.collided = false;
+                    trace.face_normal = vec3{0.0f,0.0f,0.0f};
                 }
 
-                glBindVertexArray(aabb_gl_buffer.VAO); 
-                glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                // color that one white.
+                if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
+                {  
 
-                GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
-                std::array<vertex_xnc, 3> closest_face{};
-                closest_face[0] = aabbs_vertices[closest_face_idx];
-                closest_face[1] = aabbs_vertices[closest_face_idx + 1];
-                closest_face[2] = aabbs_vertices[closest_face_idx + 2];
-                vec4 face_color = closest_face[0].color;
-                // store this color so we can restore it
-                closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    if (previous_closest_face_idx != -1)
+                    {
+                        // restore the previous colors.
+                        GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
+                        std::array<vertex_xnc, 3> previous_closest_face{};
+                        previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
+                        previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
+                        previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
 
-                GLsizeiptr size = 3 * sizeof(vertex_xnc); // Size of the new data
-                glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
-                previous_closest_face_idx = closest_face_idx;
-                previous_face_color = face_color;
+                        previous_closest_face[0].color = previous_face_color;
+                        previous_closest_face[1].color = previous_face_color;
+                        previous_closest_face[2].color = previous_face_color;
 
+                        GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                        glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
+
+                        glBindBuffer(GL_ARRAY_BUFFER, 0);
+                        glBindVertexArray(0);
+                    }
+
+                    glBindVertexArray(aabb_gl_buffer.VAO); 
+                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+
+                    GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
+                    std::array<vertex_xnc, 3> closest_face{};
+                    closest_face[0] = aabbs_vertices[closest_face_idx];
+                    closest_face[1] = aabbs_vertices[closest_face_idx + 1];
+                    closest_face[2] = aabbs_vertices[closest_face_idx + 2];
+                    vec4 face_color = closest_face[0].color;
+                    // store this color so we can restore it
+                    closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+
+                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                    glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
+                    previous_closest_face_idx = closest_face_idx;
+                    previous_face_color = face_color;
+
+                }
             }
 
             if (!noclip)
@@ -479,6 +517,7 @@ int main(int argc, char *argv[])
                 glm::vec3 right = glm::cross(camera.front, camera.up);
                 auto [new_position, new_velocity] = my_walk_move(
                     move_input,
+                    trace,
                     player_position,
                     player_velocity,
                     vec3{camera.front.x, camera.front.y, camera.front.z},
@@ -490,53 +529,60 @@ int main(int argc, char *argv[])
 
                 camera.position = glm::vec3(new_position.x, new_position.y, new_position.z);
             }
-            else
+            else // noclip
             {
                 camera = update_camera(camera, dt,
                     move_input.forward_pressed,
                     move_input.left_pressed,
                     move_input.backward_pressed,
                     move_input.right_pressed,
-                    move_speed);
+                    noclip_move_speed);
                 player_position = vec3{camera.position.x, camera.position.y, camera.position.z};
             }
-
-
-
         }
 
-        // handle mouse input. this still seems jerky and is sometimes degenerate, where it locks the y axis. I don't understand why.
+        //@Note: mouse input is no longer degenerate, it was caused by dt being 0 because of narrowing to float.
         {
             uint32_t mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+            if (!mouse_state) //@Note this is just to stop the whining about mouse_state being unused.
+            {
 
+            }
             int dx = mouse_x - last_mouse_x;
             int dy = mouse_y - last_mouse_y;
             camera = look_around(camera, dx, dy, mouse_sensitivity);
         }
 
         // rendering code goes here.
-        glClearColor(0.0f,0.05f,0.0f, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
+        {
+            glClearColor(0.0f,0.05f,0.0f, 1); // nsight says this is not allowed?
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
-        // aabbs.
-        draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
-            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_look_at_view_matrix(camera),
-            glm::mat4(1.0f)
-            );
+            // aabbs.
+            draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+                glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                get_look_at_view_matrix(camera),
+                glm::mat4(1.0f)
+                );
 
-        // vertex grid.
-        // draw_lines(grid_gl_buffer.VAO, grid_gl_buffer.VBO, grid_gl_buffer.vertex_count, x_shader_program,
-        //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-        //     get_look_at_view_matrix(camera)
-        //     );
+            // uv grid
+            draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
+                glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                get_look_at_view_matrix(camera),
+                glm::mat4(1.0f)
+                );
 
-        // uv grid
-        draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
-            glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            get_look_at_view_matrix(camera),
-            glm::mat4(1.0f)
-            );
+            // player bounding box.
+            // vec3 target_position = player_position + (20.f * vec3{camera.front.x, camera.front.y, camera.front.z});
+
+            // draw_triangles(player_aabb_gl_buffer.VAO, player_aabb_gl_buffer.VBO, player_aabb_gl_buffer.vertex_count, xnc_shader_program,
+            // glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+            // get_look_at_view_matrix(camera),
+            // glm::translate(glm::mat4(1.0f), glm::vec3(target_position.x, target_position.y, target_position.z))  
+            // );
+        }
+  
+
 
         SDL_GL_SwapWindow(window);
 
