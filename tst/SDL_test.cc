@@ -441,7 +441,7 @@ int main(int argc, char *argv[])
 
             // collision detection.
             {
-                 // collide at the old position.
+                // collide at the old position.
                 // just do "floor" collision.
                 vec3 world_up{0.0f,1.0f,0.0f};
                 size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, world_up, 10.f);
@@ -581,11 +581,8 @@ int main(int argc, char *argv[])
             // glm::translate(glm::mat4(1.0f), glm::vec3(target_position.x, target_position.y, target_position.z))  
             // );
         }
-  
-
 
         SDL_GL_SwapWindow(window);
-
     }
 
 

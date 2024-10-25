@@ -280,7 +280,6 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 wish_direction = front_clipped * forward_input + right_clipped * right_input;
     vec3 normalized_wish_direction = normalize(wish_direction);
 
-
     float input_scale = calculate_input_scale(forward_input, right_input, up_input, pm_maxspeed, pm_input_axial_extreme);
     float wish_speed = 0.0f; // I think because of some float weirdness that taking the length of wish_direction when it is 0 does something weird.
 
