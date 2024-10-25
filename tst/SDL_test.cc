@@ -515,9 +515,13 @@ int main(int argc, char *argv[])
             {
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
-                auto [new_position, new_velocity] = my_walk_move(
+
+                auto traces = AABB_Traces{};
+                traces.ground_trace = trace;
+
+                auto [new_position, new_velocity] = move(
                     move_input,
-                    trace,
+                    traces,
                     player_position,
                     player_velocity,
                     vec3{camera.front.x, camera.front.y, camera.front.z},

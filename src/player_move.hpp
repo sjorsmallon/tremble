@@ -9,6 +9,15 @@ struct Trace
     vec3 face_normal;
 };
 
+struct AABB_Traces
+{
+    Trace ground_trace;
+    Trace ceiling_trace;
+    Trace pos_x_trace;
+    Trace neg_x_trace;
+    Trace pos_z_trace;
+    Trace neg_z_trace;
+};
 
 
 //@Note: this move input is serialized and sent across the wire. I don't think that this is the correct place to define it.
@@ -65,16 +74,40 @@ vec3 accelerate(vec3 new_velocity, vec3 wish_direction, float wish_speed, float 
     return result;
 }   
 
+
 [[nodiscard]]
-std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_velocity, const bool player_is_airborne, const Trace& trace, const float dt)
+std::tuple<vec3, vec3> step_air_move(const vec3& old_position, vec3& new_velocity, const float dt)
+{
+    constexpr auto pm_maxspeed = 320.f; //@VOLATILE: also in my move., slide_move.
+
+    // clip the speed in the horizontal plane to maxspeed.
+    float speed = sqrt(new_velocity.x * new_velocity.x + new_velocity.z * new_velocity.z);
+    if (speed > pm_maxspeed)
+    {
+        speed = pm_maxspeed;
+        float y = new_velocity.y;
+
+        auto new_vector = vec3{new_velocity.x, 0.0f, new_velocity.z};
+        new_vector = normalize(new_vector);
+        new_vector = new_vector * speed;
+        new_velocity = vec3{new_vector.x, y, new_vector.z};
+    }
+
+    vec3 position = old_position + (new_velocity * dt);
+
+    // @FIXME: test if we can actually be at the new position (collide with the environment and push back). for now, we take this to be y = 10.f;
+    // we need to perform a new trace here to prevent tunneling / getting stuck in the ground. 
+
+    return std::make_tuple(position, new_velocity);
+}
+
+
+
+[[nodiscard]]
+std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_velocity, const Trace& trace, const float dt)
 {
     constexpr auto pm_maxspeed = 320.f; //@VOLATILE: also in my move.
-	constexpr auto g_gravity = 800.f;
 
-    if (player_is_airborne)
-    {
-        new_velocity.y -= g_gravity * dt;
-    }
     // collide with the ground.
 
     // clip the speed in the horizontal plane to maxspeed.
@@ -82,12 +115,12 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
     if (speed > pm_maxspeed)
     {
         speed = pm_maxspeed;
-        float old_y = new_velocity.y;
+        float y = new_velocity.y;
 
         auto new_vector = vec3{new_velocity.x, 0.0f, new_velocity.z};
         new_vector = normalize(new_vector);
         new_vector = new_vector * speed;
-        new_velocity = vec3{new_vector.x, old_y, new_vector.z};
+        new_velocity = vec3{new_vector.x, y, new_vector.z};
     }
 
 
@@ -102,19 +135,21 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
         new_velocity.y = 0.f;
     }
 
+    if (new_velocity.y > 0.f) std::print ("y velocity: {}", new_velocity.y);
+
 
     return std::make_tuple(position, new_velocity);
 }
 
 
-auto apply_friction(vec3 old_velocity, bool grounded, bool jump_pressed_this_frame, float dt) -> vec3
+auto apply_friction(vec3 old_velocity, float dt) -> vec3
 {
 	//@Hardcode:
 	auto pm_stopspeed = 100.0f;
 	auto pm_friction = 6.0f;
 
 	// snap to only planar movement.
-    if (grounded) old_velocity.y = 0.0f;
+    old_velocity.y = 0.f;
 
     float speed = length(old_velocity);
     //@Hardcode: what should this be?
@@ -126,11 +161,9 @@ auto apply_friction(vec3 old_velocity, bool grounded, bool jump_pressed_this_fra
     }
 
     float speed_drop = 0.0f;
-    if (grounded && !jump_pressed_this_frame) // do not induce a speed drop if we are intending to jump this frame. (and do not induce a speed drop if we are flying.)
-    {
-        float control = speed < pm_stopspeed ? pm_stopspeed : speed;
-        speed_drop += control * pm_friction * dt;
-    }
+
+    float control = speed < pm_stopspeed ? pm_stopspeed : speed;
+    speed_drop += control * pm_friction * dt;
 
     // adjust the speed with the induced speed drop. 
     float adjusted_speed = speed - speed_drop;
@@ -162,6 +195,24 @@ float calculate_input_scale(const float forward_move,const float right_move, con
     return scale;
 }
 
+//@FIXME: this should be better.
+[[nodiscard]]
+float calculate_input_scale(const float forward_move,const float right_move, const float max_speed, const float input_axial_extreme)
+{
+
+    int max = abs(static_cast<int>(forward_move));
+    if (abs(static_cast<int>(right_move)) > max) max = abs(static_cast<int>(right_move));
+
+    if (!max) return 0.f;
+
+    float total = sqrt(forward_move * forward_move + right_move * right_move);
+    float scale = max_speed * static_cast<float>(max) / (input_axial_extreme * total);
+    return scale;
+}
+
+
+
+
 inline bool check_jump(const Move_Input& input)
 {
 	return input.jump_pressed;
@@ -191,30 +242,6 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
     return result;
 }
 
-// it is too complex for me to think about. retry.
-// new position, new_new_velocity.
-// additionally, we cannot really do "grounded" in this function if we expect this to be invoked by different people at different times.
-
-// std::tuple<vec3, vec3> move(
-//     Move_Input& input,
-//     const vec3 old_position,
-//     const vec3 old_velocity,
-//     const vec3 front,
-//     const vec3 right,
-//     const float dt)
-// {
-//     auto grounded = ground_trace();
-//     if (grounded)
-//     {
-//         walk_move();
-//     }
-//     else
-//     {
-//         air_move();
-//     }
-
-// }
-
 
 std::tuple<vec3, vec3> my_walk_move(
 	Move_Input& input,
@@ -225,8 +252,6 @@ std::tuple<vec3, vec3> my_walk_move(
     const vec3 right,
     const float dt)
 {
-	static bool grounded = true;
-
 	constexpr auto pm_input_axial_extreme = 127.0f;	
 	constexpr auto pm_maxspeed = 320.f; 
 	constexpr auto pm_ground_acceleration = 10.f; 
@@ -234,22 +259,22 @@ std::tuple<vec3, vec3> my_walk_move(
 	constexpr auto pm_overbounce = 1.001f;
     constexpr auto pm_movement_treshold = 0.00001f; //minimum necessary movement in either axis.
     constexpr auto pm_jumpspeed = 270.f;
-    constexpr auto g_gravity = 800.f; //@VOLATILE: also fix in slide_move.
 
+    // we know we were walking when we got here.
     bool jump_pressed_this_frame = check_jump(input);
 
-    if (jump_pressed_this_frame) //is this is what is causing issues?
+    // do not apply friction if we are intending to jump.
+    vec3 old_velocity_with_friction_applied = old_velocity;
+    if (!jump_pressed_this_frame) 
     {
-        grounded = false;
+        // apply friction. this does not fully 'nullify' the velocity (or does it?). 
+        old_velocity_with_friction_applied = apply_friction(old_velocity, dt); //at this point, y velocity is already gone.
     }
-
-    // apply friction. this does not fully 'nullify' the velocity (or does it?). 
-    vec3 old_velocity_with_friction_applied = apply_friction(old_velocity, grounded, jump_pressed_this_frame, dt);
 
     // what inputs did we provide?
     float forward_input = pm_input_axial_extreme * input.forward_pressed - pm_input_axial_extreme * input.backward_pressed;
     float right_input   = pm_input_axial_extreme * input.right_pressed   - pm_input_axial_extreme * input.left_pressed;
-    float up_input      = pm_input_axial_extreme * (jump_pressed_this_frame && !grounded);
+    float up_input      = pm_input_axial_extreme * (jump_pressed_this_frame);
 
     // get rid of the y component: only look at the xz plane. the y-component is handled by "a different subroutine".
     // where are we looking?
@@ -260,7 +285,6 @@ std::tuple<vec3, vec3> my_walk_move(
     // imagine it is steep, like an incline. we do not want to move inside of that, but move smoothly
     // perpendicular to that normal. so we "clip" the velocity vector such that we redirect it along that perpendicular axis.
 	// for now, no inclines. just flat surfaces. so the normal is always {0.0f, 1.0f, 0.0f};
-
     vec3 front_clipped = front_without_y;
     vec3 right_clipped = right_without_y;
     
@@ -281,7 +305,7 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 normalized_wish_direction = normalize(wish_direction);
 
     float input_scale = calculate_input_scale(forward_input, right_input, up_input, pm_maxspeed, pm_input_axial_extreme);
-    float wish_speed = 0.0f; // I think because of some float weirdness that taking the length of wish_direction when it is 0 does something weird.
+    float wish_speed = 0.0f; // we set this because I think some float weirdness happens when taking the length of wish_direction when it is 0.
 
     if (received_input)
     {
@@ -292,14 +316,15 @@ std::tuple<vec3, vec3> my_walk_move(
 
     vec3 new_velocity{};
 
-    if (wish_speed < 0.0000001f) 
+    if (wish_speed < 0.0000001f) //@FIXME: formalize the treshold.
     {
         new_velocity = old_velocity_with_friction_applied;
     }
     else
     {
         // if we are in the air, you have less control.
-        float acceleration = (grounded) ? pm_ground_acceleration : pm_air_acceleration;
+        // float acceleration = (grounded) ? pm_ground_acceleration : pm_air_acceleration;
+        float acceleration = pm_ground_acceleration;
         new_velocity = accelerate(old_velocity_with_friction_applied, normalized_wish_direction, wish_speed, acceleration, dt);
     }
 
@@ -308,8 +333,6 @@ std::tuple<vec3, vec3> my_walk_move(
     new_velocity = clip_vector(new_velocity, trace.face_normal, pm_overbounce);
     
 
-    bool player_is_airborne = !trace.collided; 
-    if (!player_is_airborne) grounded = true;
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
     // if we start seeing nan's, i'll re-enable it. - Sjors, 22-10-2024
@@ -342,7 +365,6 @@ std::tuple<vec3, vec3> my_walk_move(
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
     // if we start seeing nan's, i'll re-enable it. - Sjors, 22-10-2024
 
-
     // skip checking the movement vector if the movement vector is too small.
     // if (fabs(new_velocity.x) < pm_movement_treshold && fabs(new_velocity.z) < pm_movement_treshold)
     // {
@@ -361,23 +383,147 @@ std::tuple<vec3, vec3> my_walk_move(
     // }
 
     // if the player is not airborne, return grounded to true. 
-    if (!player_is_airborne)
-    {
-        grounded = true;
-    }
+    // if (!player_is_airborne)
+    // {
+    //     grounded = true;
+    // }
 
     // just before step_slide-move, reassign the y velocity (that has not been touched up until now.)
-    new_velocity.y = old_velocity.y;
+    // new_velocity.y = old_velocity.y;
 
     // we are missing where to inject the jump. so let me just do that here.
     // a jump is not a velocity, but just a "set speed" for one particular frame, that
     // gets removed over time with gravity.
-    if (jump_pressed_this_frame && !player_is_airborne && grounded)
+    if (jump_pressed_this_frame)
     {
-        std::print ("induced jump speed.\n");
+        std::print ("induced jump speed: {}\n", pm_jumpspeed * input_scale);
         new_velocity.y = (pm_jumpspeed * input_scale);
-        grounded = false;
     }
 
-    return step_slide_move(old_position, new_velocity, player_is_airborne, trace, dt);
+    return step_slide_move(old_position, new_velocity, trace, dt);
 }
+
+
+std::tuple<vec3, vec3> my_air_move(
+    Move_Input& input,
+    AABB_Traces& traces,
+    const vec3& old_position,
+    const vec3& old_velocity,
+    const vec3& front,
+    const vec3& right,
+    const float dt)
+{
+    constexpr auto g_gravity = 800.f;
+    constexpr auto pm_input_axial_extreme = 127.f;
+    constexpr auto pm_overbounce = 1.001f;
+    constexpr auto pm_maxspeed = 320.f; 
+    constexpr auto pm_air_acceleration = 5.0f;
+
+
+    vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
+    // what inputs did we provide?
+    float forward_input = pm_input_axial_extreme * input.forward_pressed - pm_input_axial_extreme * input.backward_pressed;
+    float right_input   = pm_input_axial_extreme * input.right_pressed   - pm_input_axial_extreme * input.left_pressed;
+    // this does not matter.
+    // float up_input      = pm_input_axial_extreme * (jump_pressed_this_frame);
+
+    // get rid of the y component: only look at the xz plane.
+    // where are we looking?
+    vec3 front_without_y = vec3{front.x, 0.0f, front.z};
+    vec3 right_without_y = vec3{right.x, 0.0f, right.z};
+
+
+    //@Note: this is naively assuming we are only checking the ground trace. how do we do collisions with faces?
+    // do we do that later on?
+
+    // look at the floor below you. this is known as a "ground trace". what is the normal of that face?
+    // imagine it is steep, like an incline. we do not want to move inside of that, but move smoothly
+    // perpendicular to that normal. so we "clip" the velocity vector such that we redirect it along that perpendicular axis.
+    // for now, no inclines. just flat surfaces. so the normal is always {0.0f, 1.0f, 0.0f};
+    vec3 front_clipped = front_without_y;
+    vec3 right_clipped = right_without_y;
+    
+    if (traces.ground_trace.collided)
+    {
+        front_clipped = clip_vector(front_without_y, traces.ground_trace.face_normal, pm_overbounce);
+        right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
+    }
+
+    bool received_input = (input.forward_pressed  ||
+                           input.backward_pressed ||
+                           input.left_pressed     ||
+                           input.right_pressed);
+
+    // what is the resulting direction we should take, based on the new clipped front and right (accounting for the walls we might be colliding with),
+    // and what buttons I pressed in relation to those vectors.
+    vec3 wish_direction = front_clipped * forward_input + right_clipped * right_input;
+    vec3 normalized_wish_direction = normalize(wish_direction);
+
+    float input_scale = calculate_input_scale(forward_input, right_input, pm_maxspeed, pm_input_axial_extreme);
+    float wish_speed = 0.0f; // we set this because I think some float weirdness happens when taking the length of wish_direction when it is 0.
+
+    if (received_input)
+    {
+        // how hard did we move the joystick? -127... +127. button presses are always max (127) or min (127).
+        // this makes the "wish" direction (the one purely based on input) less strong.
+        wish_speed  = input_scale * length(wish_direction);
+    } 
+
+    vec3 new_velocity{};
+
+    if (wish_speed < 0.0000001f) //@FIXME: formalize the treshold.
+    {
+        new_velocity = old_velocity; // uh.. how do we apply gravity now?
+    }
+    else
+    {
+        // if we are in the air, you have less control.
+        float acceleration = pm_air_acceleration;
+        new_velocity = accelerate(old_velocity_without_y, normalized_wish_direction, wish_speed, acceleration, dt);
+    }
+
+
+    float new_speed  = length(new_velocity);
+    new_velocity = clip_vector(new_velocity, traces.ground_trace.face_normal, pm_overbounce);
+    new_velocity = normalize(new_velocity);
+    new_velocity = new_speed * new_velocity;
+
+
+    // apply gravity.
+    new_velocity.y = old_velocity.y;
+    new_velocity.y -= g_gravity * dt;
+
+    return step_air_move(old_position, new_velocity, dt);
+}
+
+
+
+std::tuple<vec3, vec3> move(
+    Move_Input& input,
+    AABB_Traces& traces,
+    const vec3& old_position,
+    const vec3& old_velocity,
+    const vec3& front,
+    const vec3& right,
+    const float dt)
+{
+    auto& ground_trace = traces.ground_trace;
+    // we are grounded if (and only if):
+    // - the ground trace hits.
+    // - y velocity is going down.
+    bool grounded = ((ground_trace.collided) && (old_velocity.y <= 0.0f));
+
+    if (grounded)
+    {
+        //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move asumes that we are grounded.
+        // I do not really like that.
+        vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
+        return my_walk_move(input, ground_trace, old_position, old_velocity_without_y, front, right, dt);
+    }
+    else
+    {
+        return my_air_move(input, traces, old_position, old_velocity, front, right, dt);
+    }
+
+}
+
