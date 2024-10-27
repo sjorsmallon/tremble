@@ -179,6 +179,103 @@ uint32_t create_interleaved_xnc_shader_program()
     return shader_program;
 }
 
+AABB_Traces yield_aabb_trace_against_bsp(BSP* bsp, const std::vector<vertex_xnc>& vertices_used_to_create_the_bsp, vec3 player_position, float distance)
+{
+    AABB_Traces traces{};
+
+    vec3 pos_x_normal = vec3{ 1.0f,  0.0f,  0.0f}; 
+    vec3 neg_x_normal = vec3{-1.0f,  0.0f,  0.0f}; 
+    vec3 pos_y_normal = vec3{ 0.0f,  1.0f,  0.0f}; 
+    vec3 neg_y_normal = vec3{ 0.0f, -1.0f,  0.0f}; 
+    vec3 pos_z_normal = vec3{ 0.0f,  0.0f,  1.0f}; 
+    vec3 neg_z_normal = vec3{ 0.0f,  0.0f, -1.0f}; 
+
+    size_t closest_pos_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_x_normal, distance);
+    size_t closest_neg_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_x_normal, distance);
+    size_t closest_pos_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_y_normal, distance);
+    size_t closest_neg_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_y_normal, distance);
+    size_t closest_pos_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_z_normal, distance);
+    size_t closest_neg_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_z_normal, distance);
+
+    if (closest_pos_x_face_idx != -1)
+    {
+
+        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.pos_x_trace.collided = true;
+        traces.pos_x_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_x_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.neg_x_trace.collided = true;
+        traces.neg_x_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_pos_y_face_idx != -1)
+    {
+            auto& v0 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.ceiling_trace.collided = true;
+        traces.ceiling_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_y_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.ground_trace.collided = true;
+        traces.ground_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_pos_z_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.pos_z_trace.collided = true;
+        traces.pos_z_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_z_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.neg_z_trace.collided = true;
+        traces.neg_z_trace.face_normal = face_normal_at_v0;
+    }
+
+    return traces;
+}
+
+
+
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
@@ -298,7 +395,6 @@ int main(int argc, char *argv[])
     // shaders related
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
     uint32_t x_shader_program = create_x_shader_program();
-
 
     // base AABB.
     auto path = std::string{"../data/list_of_AABB"};
@@ -441,74 +537,76 @@ int main(int argc, char *argv[])
 
             // collision detection.
             {
+
                 // collide at the old position.
                 // just do "floor" collision.
-                vec3 world_up{0.0f,1.0f,0.0f};
-                size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, world_up, 10.f);
+                // vec3 aabb_negative_y_normal{0.0f,-1.0f,0.0f};
+                // size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, aabb_negative_y_normal, 10.f);
 
-                // set trace information
-                if (closest_face_idx != -1)
-                {
-                    auto& v0 = aabbs_vertices[closest_face_idx].position;
-                    auto& v1 = aabbs_vertices[closest_face_idx + 1].position;
-                    auto& v2 = aabbs_vertices[closest_face_idx + 2].position;
-                    vec3 e0 =  normalize(v1 - v0);
-                    vec3 e1 =  normalize(v2 - v0);
-                    vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+                // // set trace information
+                // if (traces.ground_trace.collided)
+                // {
+                //     auto& v0 = aabbs_vertices[closest_face_idx].position;
+                //     auto& v1 = aabbs_vertices[closest_face_idx + 1].position;
+                //     auto& v2 = aabbs_vertices[closest_face_idx + 2].position;
+                //     vec3 e0 =  normalize(v1 - v0);
+                //     vec3 e1 =  normalize(v2 - v0);
+                //     vec3 face_normal_at_v0 = normalize(cross(e0, e1));
 
-                    trace.collided = true;
-                    trace.face_normal = face_normal_at_v0; 
-                }
-                else
-                {
-                    trace.collided = false;
-                    trace.face_normal = vec3{0.0f,0.0f,0.0f};
-                }
+                //     trace.collided = true;
+                //     trace.face_normal = face_normal_at_v0; 
+                // }
+                // else
+                // {
+                //     trace.collided = false;
+                //     trace.face_normal = vec3{0.0f,0.0f,0.0f};
+                // }
 
                 // color that one white.
-                if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
-                {  
+                // if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
+                // {  
 
-                    if (previous_closest_face_idx != -1)
-                    {
-                        // restore the previous colors.
-                        GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
-                        std::array<vertex_xnc, 3> previous_closest_face{};
-                        previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
-                        previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
-                        previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
+                //     if (previous_closest_face_idx != -1)
+                //     {
+                //         // restore the previous colors.
+                //         GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
+                //         std::array<vertex_xnc, 3> previous_closest_face{};
+                //         previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
+                //         previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
+                //         previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
 
-                        previous_closest_face[0].color = previous_face_color;
-                        previous_closest_face[1].color = previous_face_color;
-                        previous_closest_face[2].color = previous_face_color;
+                //         previous_closest_face[0].color = previous_face_color;
+                //         previous_closest_face[1].color = previous_face_color;
+                //         previous_closest_face[2].color = previous_face_color;
 
-                        GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                        glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
+                //         GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                //         glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
 
-                        glBindBuffer(GL_ARRAY_BUFFER, 0);
-                        glBindVertexArray(0);
-                    }
+                //         glBindBuffer(GL_ARRAY_BUFFER, 0);
+                //         glBindVertexArray(0);
+                //     }
 
-                    glBindVertexArray(aabb_gl_buffer.VAO); 
-                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                //     glBindVertexArray(aabb_gl_buffer.VAO); 
+                //     glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
 
-                    GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
-                    std::array<vertex_xnc, 3> closest_face{};
-                    closest_face[0] = aabbs_vertices[closest_face_idx];
-                    closest_face[1] = aabbs_vertices[closest_face_idx + 1];
-                    closest_face[2] = aabbs_vertices[closest_face_idx + 2];
-                    vec4 face_color = closest_face[0].color;
-                    // store this color so we can restore it
-                    closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                    closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                    closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                //     GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
+                //     std::array<vertex_xnc, 3> closest_face{};
+                //     closest_face[0] = aabbs_vertices[closest_face_idx];
+                //     closest_face[1] = aabbs_vertices[closest_face_idx + 1];
+                //     closest_face[2] = aabbs_vertices[closest_face_idx + 2];
+                //     vec4 face_color = closest_face[0].color;
+                //     // store this color so we can restore it
+                //     closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                //     closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                //     closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
 
-                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                    glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
-                    previous_closest_face_idx = closest_face_idx;
-                    previous_face_color = face_color;
+                //     GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                //     glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
+                //     previous_closest_face_idx = closest_face_idx;
+                //     previous_face_color = face_color;
 
-                }
+                // }
+
             }
 
             if (!noclip)
@@ -516,10 +614,9 @@ int main(int argc, char *argv[])
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
 
-                auto traces = AABB_Traces{};
-                traces.ground_trace = trace;
-
-                auto [new_position, new_velocity] = move(
+                auto traces = yield_aabb_trace_against_bsp(bsp, aabbs_vertices, player_position, 10.f);
+                
+                auto [new_position, new_velocity] = player_move(
                     move_input,
                     traces,
                     player_position,

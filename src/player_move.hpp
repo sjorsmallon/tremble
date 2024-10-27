@@ -242,10 +242,9 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
     return result;
 }
 
-
 std::tuple<vec3, vec3> my_walk_move(
 	Move_Input& input,
-    const Trace& trace,
+    const AABB_Traces& traces,
     const vec3 old_position,
     const vec3 old_velocity,
     const vec3 front,
@@ -288,11 +287,30 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 front_clipped = front_without_y;
     vec3 right_clipped = right_without_y;
     
-    if (trace.collided)
+    if (traces.ground_trace.collided)
     {
-        front_clipped = clip_vector(front_without_y, trace.face_normal, pm_overbounce);
-        right_clipped = clip_vector(right_without_y, trace.face_normal, pm_overbounce);
+        front_clipped = clip_vector(front_without_y, traces.ground_trace.face_normal, pm_overbounce);
+        right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
+
+    // if (traces.pos_z_trace.collided)
+    // {
+    //     std::print("clipping the input vector for pos_z..\n");
+    //     std::print("right_clipped: {}\n", right_clipped);
+    //     std::print("front_clipped: {}\n", front_clipped);
+    //     right_clipped = clip_vector(right_clipped, traces.pos_z_trace.face_normal, pm_overbounce);
+    //     front_clipped = clip_vector(front_clipped, traces.pos_z_trace.face_normal, pm_overbounce);
+
+    //     std::print("right_clipped AFTER: {}\n", right_clipped);
+    //     std::print("front_clipped AFTER: {}\n", front_clipped);
+    // }
+    // if (traces.neg_z_trace.collided)
+    // {
+    //     right_clipped = clip_vector(right_clipped, traces.neg_z_trace.face_normal, pm_overbounce);
+    //     front_clipped = clip_vector(front_clipped, traces.neg_z_trace.face_normal, pm_overbounce);
+    // }
+
+
 
  	bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
@@ -330,8 +348,9 @@ std::tuple<vec3, vec3> my_walk_move(
 
     // clip the new velocity it against the ground plane. take the length before it is clipped.
     float new_speed  = length(new_velocity);
-    new_velocity = clip_vector(new_velocity, trace.face_normal, pm_overbounce);
+    new_velocity = clip_vector(new_velocity, traces.ground_trace.face_normal, pm_overbounce);
     
+
 
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
@@ -360,6 +379,14 @@ std::tuple<vec3, vec3> my_walk_move(
     // but we still want to retain the speed we were moving in before.
     new_velocity = normalize(new_velocity);
     new_velocity = new_speed * new_velocity;
+
+
+    //@FIXME: do this again for all planes?
+    new_speed = length(new_velocity);
+    new_velocity = clip_vector(new_velocity, traces.pos_z_trace.face_normal, pm_overbounce);
+    new_velocity = normalize(new_velocity);
+    new_velocity = new_speed * new_velocity;
+
 
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
@@ -400,7 +427,7 @@ std::tuple<vec3, vec3> my_walk_move(
         new_velocity.y = (pm_jumpspeed * input_scale);
     }
 
-    return step_slide_move(old_position, new_velocity, trace, dt);
+    return step_slide_move(old_position, new_velocity, traces.ground_trace, dt);
 }
 
 
@@ -443,11 +470,15 @@ std::tuple<vec3, vec3> my_air_move(
     vec3 front_clipped = front_without_y;
     vec3 right_clipped = right_without_y;
     
+    // for all planes:
     if (traces.ground_trace.collided)
     {
         front_clipped = clip_vector(front_without_y, traces.ground_trace.face_normal, pm_overbounce);
         right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
+
+
+
 
     bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
@@ -489,6 +520,12 @@ std::tuple<vec3, vec3> my_air_move(
     new_velocity = new_speed * new_velocity;
 
 
+    new_speed = length(new_velocity);
+    new_velocity = clip_vector(new_velocity, traces.pos_z_trace.face_normal, pm_overbounce);
+    new_velocity = normalize(new_velocity);
+    new_velocity = new_speed * new_velocity;
+
+
     // apply gravity.
     new_velocity.y = old_velocity.y;
     new_velocity.y -= g_gravity * dt;
@@ -498,7 +535,7 @@ std::tuple<vec3, vec3> my_air_move(
 
 
 
-std::tuple<vec3, vec3> move(
+std::tuple<vec3, vec3> player_move(
     Move_Input& input,
     AABB_Traces& traces,
     const vec3& old_position,
@@ -518,7 +555,7 @@ std::tuple<vec3, vec3> move(
         //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move asumes that we are grounded.
         // I do not really like that.
         vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
-        return my_walk_move(input, ground_trace, old_position, old_velocity_without_y, front, right, dt);
+        return my_walk_move(input, traces, old_position, old_velocity_without_y, front, right, dt);
     }
     else
     {

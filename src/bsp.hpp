@@ -253,7 +253,7 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 
 // the bsp should also have a pointer to the buffer it is based on, I guess?
 // FIXME: cleaner would be std::pair<bool found, size_t index>.
-inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc>& all_faces_buffer,const vec3& position, float distance_treshold)
+inline size_t find_closest_proximity_face_index(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer,const vec3& position, float distance_treshold)
 {
 	const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
 
@@ -305,7 +305,7 @@ inline size_t find_closest_proximity_face_index(BSP* bsp, std::vector<vertex_xnc
 
 
 
-inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, std::vector<vertex_xnc>& all_faces_buffer, const vec3& position, const vec3& world_axis, float distance_treshold)
+inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer, const vec3& position, const vec3& world_axis, float distance_treshold)
 {
     // any angle that is between 0 and 80 degrees from up is a floor.
     constexpr auto pm_floor_angle_treshold_deg = 80.f;
