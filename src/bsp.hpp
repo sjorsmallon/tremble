@@ -2,7 +2,7 @@
 #include "vec.hpp"
 #include <cfloat> // FLT_MAX
 #include <cmath>
-
+#include <functional>
 // move to math 
 size_t abs(size_t a, size_t b) {
     return (a > b) ? (a - b) : (b - a);
@@ -371,6 +371,65 @@ inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, const 
 
 
 
+inline vec3 compute_normal(const vec3& p0, const vec3& p1, const vec3& p2) {
+    vec3 edge1 = p1 - p0;
+    vec3 edge2 = p2 - p0;
+    return normalize(cross(edge1, edge2));
+}
+
+// Free function to classify the position of the AABB relative to a plane
+inline Partition_Result classify_aabb_against_plane(const AABB& aabb, const vec3& normal, const vec3& point)
+{
+    float d_min = dot(normal, aabb.min - point);
+    float d_max = dot(normal, aabb.max - point);
+    
+    if (d_min > 0 && d_max > 0) {
+        return Partition_Result::FRONT;  // Entirely in front
+    } else if (d_min < 0 && d_max < 0) {
+        return Partition_Result::BACK;   // Entirely behind
+    } else {
+        return Partition_Result::STRADDLING; // Straddling the plane
+    }
+}
+
+
+inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
+    
+    std::vector<size_t> colliding_faces;
+
+    // Recursive lambda for traversing the BSP tree
+    std::function<void(BSP*)> traverse = [&](BSP* node) {
+        if (node == nullptr) return;
+        
+        // Get the three vertices of the triangle from `all_faces_buffer`
+        const vec3& p0 = all_faces_buffer[node->face_idx].position;
+        const vec3& p1 = all_faces_buffer[node->face_idx + 1].position;
+        const vec3& p2 = all_faces_buffer[node->face_idx + 2].position;
+        
+        // Compute the face normal
+        vec3 normal = compute_normal(p0, p1, p2);
+        
+        // Classify the AABB's position relative to the current plane
+        Partition_Result side = classify_aabb_against_plane(aabb, normal, p0);
+        
+        if (side == Partition_Result::FRONT || side == Partition_Result::STRADDLING) {
+            traverse(node->front);
+        }
+        
+        if (side == Partition_Result::BACK || side == Partition_Result::STRADDLING) {
+            traverse(node->back);
+        }
+         else if (side == Partition_Result::STRADDLING) {
+            // Traverse both front and back when straddling
+            traverse(node->front);
+            traverse(node->back);
+            colliding_faces.push_back(node->face_idx);
+        }
+    };
+
+    traverse(bsp);
+    return colliding_faces;
+}
 
 
 
