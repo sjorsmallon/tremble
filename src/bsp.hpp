@@ -1,34 +1,40 @@
 #pragma once
 #include "vec.hpp"
+#include "plane.hpp"
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/norm.hpp>  // for length2
+
 #include <cfloat> // FLT_MAX
 #include <cmath>
 #include <functional>
+
+
 // move to math 
 size_t abs(size_t a, size_t b) {
     return (a > b) ? (a - b) : (b - a);
 }
 
-struct Plane
-{
-	vec3 point;
-	vec3 normal;
-};
-
-Plane to_plane(vec3& v0, vec3& v1, vec3& v2)
-{
-	vec3 e0 =  normalize(v1 - v0);
-	vec3 e1 =  normalize(v2 - v0);
-	vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-	return Plane{.point = v0, .normal = face_normal_at_v0};
+inline vec3 compute_normal(const vec3& p0, const vec3& p1, const vec3& p2) {
+    vec3 edge1 = p1 - p0;
+    vec3 edge2 = p2 - p0;
+    return normalize(cross(edge1, edge2));
 }
 
-enum class Partition_Result
+// Free function to classify the position of the AABB relative to a plane
+inline Partition_Result classify_aabb_against_plane(const AABB& aabb, const vec3& normal, const vec3& point)
 {
-    BACK,
-    FRONT,
-    STRADDLING
-};
+    float d_min = dot(normal, aabb.min - point);
+    float d_max = dot(normal, aabb.max - point);
+    
+    if (d_min > 0 && d_max > 0) {
+        return Partition_Result::FRONT;  // Entirely in front
+    } else if (d_min < 0 && d_max < 0) {
+        return Partition_Result::BACK;   // Entirely behind
+    } else {
+        return Partition_Result::STRADDLING; // Straddling the plane
+    }
+}
+
 
 struct BSP
 {
@@ -88,7 +94,6 @@ bool is_point_in_triangle(const vec3& point, const vec3& v0, const vec3& v1, con
 
     return true;
 }
-
 
 // move to math
 float point_to_edge_distance(const vec3& point, const vec3& edge_start, const vec3& edge_end)
@@ -251,145 +256,90 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 }
 
 
-// the bsp should also have a pointer to the buffer it is based on, I guess?
-// FIXME: cleaner would be std::pair<bool found, size_t index>.
-inline size_t find_closest_proximity_face_index(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer,const vec3& position, float distance_treshold)
-{
-	const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
-
-	if (bsp == nullptr)
-	{
-		return SENTINEL_FACE_IDX_NOT_FOUND;
-	}
-
-	auto& v0 = all_faces_buffer[bsp->face_idx].position;
-	auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
-	auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
-
-	// how close are we actually? if we are in the plane described by the triangle, or even if we are not.
-	float distance = point_to_triangle_distance(position, v0, v1, v2);
-
-	// ok, this is it.
-	if (distance < distance_treshold)
-	{
-		return bsp->face_idx;
-	}
-
-	BSP* first_branch = nullptr;
-	BSP* second_branch = nullptr;
-
-	// behind. start exhausting the back planes first.
-	if (distance < 0.0f)
-	{
-		first_branch = bsp->back;
-		second_branch = bsp->front;
-	}
-	else // in front. start exhausting the front planes first.
-	{
-		first_branch = bsp->front;
-		second_branch = bsp->back;
-	}
-
-	size_t first_face_index = find_closest_proximity_face_index(first_branch, all_faces_buffer, position, distance_treshold);
-	if (first_face_index != SENTINEL_FACE_IDX_NOT_FOUND)
-	{
-		return first_face_index;
-	}
-
-    // Check the second branch. 
-    return find_closest_proximity_face_index(second_branch, all_faces_buffer, position, distance_treshold);
+// Utility to get min and max projection of a triangle on an axis
+void project_triangle_on_axis(const vec3& p0, const vec3& p1, const vec3& p2, const vec3& axis, float& min, float& max) {
+    min = max = dot(p0, axis);
+    float proj1 = dot(p1, axis);
+    float proj2 = dot(p2, axis);
+    min = std::min({min, proj1, proj2});
+    max = std::max({max, proj1, proj2});
 }
 
+// Utility to get min and max projection of an AABB on an axis
+void project_aabb_on_axis(const AABB& aabb, const vec3& axis, float& min, float& max) {
+    std::array<vec3, 8> corners = {
+        vec3{aabb.min.x, aabb.min.y, aabb.min.z},
+        vec3{aabb.min.x, aabb.min.y, aabb.max.z},
+        vec3{aabb.min.x, aabb.max.y, aabb.min.z},
+        vec3{aabb.min.x, aabb.max.y, aabb.max.z},
+        vec3{aabb.max.x, aabb.min.y, aabb.min.z},
+        vec3{aabb.max.x, aabb.min.y, aabb.max.z},
+        vec3{aabb.max.x, aabb.max.y, aabb.min.z},
+        vec3{aabb.max.x, aabb.max.y, aabb.max.z}
+    };
 
-
-
-
-
-inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer, const vec3& position, const vec3& world_axis, float distance_treshold)
-{
-    // any angle that is between 0 and 80 degrees from up is a floor.
-    constexpr auto pm_floor_angle_treshold_deg = 80.f;
-
-    const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
-
-    if (bsp == nullptr)
-    {
-        return SENTINEL_FACE_IDX_NOT_FOUND;
+    min = max = dot(corners[0], axis);
+    for (const auto& corner : corners) {
+        float proj = dot(corner, axis);
+        min = std::min(min, proj);
+        max = std::max(max, proj);
     }
-
-    auto& v0 = all_faces_buffer[bsp->face_idx].position;
-    auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
-    auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
-
-    // how close are we actually? if we are in the plane described by the triangle, or even if we are not.
-    float distance = point_to_triangle_distance(position, v0, v1, v2);
-    // ok, this is close enough.
-    if (distance < distance_treshold)
-    {
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        //  calculate the angle w.r.t the world angle.
-        auto dot_product=  dot(face_normal_at_v0, world_axis);
-        float floor_angle = acos(dot_product);
-        if (fabs(dot_product) < 0.000001f)//@FIXME: formalize this. if the up vector and the wall vector are orthogonal, the dot product is zero and we are just dealing with noise.
-        {
-            // do nothing.
-        }
-        else if (floor_angle < pm_floor_angle_treshold_deg && floor_angle > -pm_floor_angle_treshold_deg)
-        {
-            return bsp->face_idx;
-        }
-    }
-
-    BSP* first_branch = nullptr;
-    BSP* second_branch = nullptr;
-
-    // behind. start exhausting the back planes first.
-    if (distance < 0.0f)
-    {
-        first_branch = bsp->back;
-        second_branch = bsp->front;
-    }
-    else // in front. start exhausting the front planes first.
-    {
-        first_branch = bsp->front;
-        second_branch = bsp->back;
-    }
-
-    size_t first_face_index = find_closest_proximity_face_index_with_world_axis(first_branch, all_faces_buffer, position, world_axis, distance_treshold);
-    if (first_face_index != SENTINEL_FACE_IDX_NOT_FOUND)
-    {
-        return first_face_index;
-    }
-
-    // Check the second branch. 
-    return find_closest_proximity_face_index_with_world_axis(second_branch, all_faces_buffer, position, world_axis, distance_treshold);
 }
 
+bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, const AABB& aabb) {
 
+    std::array<vec3, 3> aabb_axes{
+        vec3{1.f, 0, 0},
+        vec3{0, 1.f, 0},
+        vec3{0, 0, 1.f}
+    };
 
-
-inline vec3 compute_normal(const vec3& p0, const vec3& p1, const vec3& p2) {
+    // Triangle edges
     vec3 edge1 = p1 - p0;
-    vec3 edge2 = p2 - p0;
-    return normalize(cross(edge1, edge2));
-}
+    vec3 edge2 = p2 - p1;
+    vec3 edge3 = p0 - p2;
 
-// Free function to classify the position of the AABB relative to a plane
-inline Partition_Result classify_aabb_against_plane(const AABB& aabb, const vec3& normal, const vec3& point)
-{
-    float d_min = dot(normal, aabb.min - point);
-    float d_max = dot(normal, aabb.max - point);
-    
-    if (d_min > 0 && d_max > 0) {
-        return Partition_Result::FRONT;  // Entirely in front
-    } else if (d_min < 0 && d_max < 0) {
-        return Partition_Result::BACK;   // Entirely behind
-    } else {
-        return Partition_Result::STRADDLING; // Straddling the plane
+    // 1. Test triangle normal as an axis
+    vec3 triangle_normal = normalize(cross(edge1, edge2));
+    float tri_min, tri_max, aabb_min, aabb_max;
+
+    project_triangle_on_axis(p0, p1, p2, triangle_normal, tri_min, tri_max);
+    project_aabb_on_axis(aabb, triangle_normal, aabb_min, aabb_max);
+
+    if (tri_max < aabb_min || aabb_max < tri_min) return false;
+
+    // 2. Test the AABB face normals
+    for (const auto& axis : aabb_axes) {
+        project_triangle_on_axis(p0, p1, p2, axis, tri_min, tri_max);
+        project_aabb_on_axis(aabb, axis, aabb_min, aabb_max);
+
+        if (tri_max < aabb_min || aabb_max < tri_min) return false;
     }
+
+    // 3. Test cross products of triangle edges and AABB axes
+    std::array<vec3, 9> cross_axes = {
+        cross(edge1, aabb_axes[0]),
+        cross(edge1, aabb_axes[1]),
+        cross(edge1, aabb_axes[2]),
+        cross(edge2, aabb_axes[0]),
+        cross(edge2, aabb_axes[1]),
+        cross(edge2, aabb_axes[2]),
+        cross(edge3, aabb_axes[0]),
+        cross(edge3, aabb_axes[1]),
+        cross(edge3, aabb_axes[2])
+    };
+
+
+    for (const auto& axis : cross_axes) {
+        if (glm::length2(glm::vec3(axis.x, axis.y, axis.z)) < 1e-6) continue; // Skip near-zero axis
+        project_triangle_on_axis(p0, p1, p2, axis, tri_min, tri_max);
+        project_aabb_on_axis(aabb, axis, aabb_min, aabb_max);
+
+        if (tri_max < aabb_min || aabb_max < tri_min) return false;
+    }
+
+    // No separating axis found; they intersect
+    return true;
 }
 
 
@@ -402,32 +352,35 @@ inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, con
         if (node == nullptr) return;
         
         // Get the three vertices of the triangle from `all_faces_buffer`
-        const vec3& p0 = all_faces_buffer[node->face_idx].position;
-        const vec3& p1 = all_faces_buffer[node->face_idx + 1].position;
-        const vec3& p2 = all_faces_buffer[node->face_idx + 2].position;
+        const vec3& v0 = all_faces_buffer[node->face_idx].position;
+        const vec3& v1 = all_faces_buffer[node->face_idx + 1].position;
+        const vec3& v2 = all_faces_buffer[node->face_idx + 2].position;
         
         // Compute the face normal
-        vec3 normal = compute_normal(p0, p1, p2);
+        vec3 normal = compute_normal(v0, v1, v2);
         
         // Classify the AABB's position relative to the current plane
-        Partition_Result side = classify_aabb_against_plane(aabb, normal, p0);
-        
-        if (side == Partition_Result::FRONT || side == Partition_Result::STRADDLING) {
+        Partition_Result side = classify_aabb_against_plane(aabb, normal, v0);
+
+         if (side == Partition_Result::FRONT) {
             traverse(node->front);
-        }
-        
-        if (side == Partition_Result::BACK || side == Partition_Result::STRADDLING) {
+        } else if (side == Partition_Result::BACK) {
             traverse(node->back);
-        }
-         else if (side == Partition_Result::STRADDLING) {
+        } else if (side == Partition_Result::STRADDLING) {
             // Traverse both front and back when straddling
             traverse(node->front);
             traverse(node->back);
-            colliding_faces.push_back(node->face_idx);
+
+            // we are straddling the plane, but are we actually colliding?
+            if (triangle_intersects_aabb(v0, v1, v2,aabb))
+            {
+                colliding_faces.push_back(node->face_idx);
+            }
         }
     };
 
     traverse(bsp);
+
     return colliding_faces;
 }
 
@@ -478,58 +431,3 @@ inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, con
 
 
 
-
-
-
-    // BSP* first_branch = nullptr;
-    // BSP* second_branch = nullptr;
-
-    // if (distance >= 0.0f)
-    // {
-    //     // The point is on the front side of the plane
-    //     first_branch = bsp->front;
-    //     second_branch = bsp->back;
-    // } else {
-    //     // The point is on the back side of the plane
-    //     first_branch = bsp->back;
-    //     second_branch = bsp->front;
-    // }
-
-
-    // // Recursively search the first branch (closer to the position)
-    // size_t closest_index_first = find_closest_proximity_face_index(first_branch, all_faces_buffer, position);
-
-    // // Check the current BSP node's face as a potential candidate
-    // float closest_distance = FLT_MAX;
-    // size_t closest_face_index = -1; // sentinel value
-
-    // if (closest_index_first != -1)
-    // {
-    //     // Calculate distance to the closest face in the first branch
-    //     vec3 closest_point_on_face = get_closest_point_on_face(all_faces_buffer[closest_index_first], position);
-    //     closest_distance = distance_between(position, closest_point_on_face);
-    //     closest_face_index = closest_index_first;
-    // }
-
-    // // Check the current face's distance
-    // vec3 closest_point_on_current_face = get_closest_point_on_face(v0, v1, v2, position);
-    // float distance_to_current_face = distance_between(position, closest_point_on_current_face);
-
-    // if (distance_to_current_face < closest_distance) {
-    //     closest_face_index = bsp->index_of_face;
-    //     closest_distance = distance_to_current_face;
-    // }
-
-    // // Recursively search the second branch (further from the position)
-    // size_t closest_index_second = find_closest_proximity_face_index(second_branch, all_faces_buffer, position);
-
-    // if (closest_index_second != -1) {
-    //     vec3 closest_point_on_face = get_closest_point_on_face(all_faces_buffer[closest_index_second], position);
-    //     float distance_to_second_face = distance_between(position, closest_point_on_face);
-
-    //     if (distance_to_second_face < closest_distance) {
-    //         closest_face_index = closest_index_second;
-    //     }
-    // }
-
-    // return closest_face_index;

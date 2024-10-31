@@ -521,3 +521,11 @@ std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, co
 
     return vertices;
 }
+
+
+
+// where do I supply the VAO, VBO, and the shader program from? I do not understand how to do this without making a huge global dependency stack.
+void debug_draw_arrow(vec3 start, vec3 end)
+{
+
+}

@@ -390,3 +390,350 @@ do { \
 // timing related
 size_t current_timing_idx = 0;
 auto timings = std::array<double, 1024>{};
+
+
+AABB_Traces yield_aabb_trace_against_bsp(BSP* bsp, const std::vector<vertex_xnc>& vertices_used_to_create_the_bsp, vec3 player_position, float distance)
+{
+    AABB_Traces traces{};
+
+    vec3 pos_x_normal = vec3{ 1.0f,  0.0f,  0.0f}; 
+    vec3 neg_x_normal = vec3{-1.0f,  0.0f,  0.0f}; 
+    vec3 pos_y_normal = vec3{ 0.0f,  1.0f,  0.0f}; 
+    vec3 neg_y_normal = vec3{ 0.0f, -1.0f,  0.0f}; 
+    vec3 pos_z_normal = vec3{ 0.0f,  0.0f,  1.0f}; 
+    vec3 neg_z_normal = vec3{ 0.0f,  0.0f, -1.0f}; 
+
+    size_t closest_pos_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_x_normal, distance);
+    size_t closest_neg_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_x_normal, distance);
+    size_t closest_pos_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_y_normal, distance);
+    size_t closest_neg_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_y_normal, distance);
+    size_t closest_pos_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_z_normal, distance);
+    size_t closest_neg_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_z_normal, distance);
+
+    if (closest_pos_x_face_idx != -1)
+    {
+
+        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.pos_x_trace.collided = true;
+        traces.pos_x_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_x_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.neg_x_trace.collided = true;
+        traces.neg_x_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_pos_y_face_idx != -1)
+    {
+            auto& v0 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.ceiling_trace.collided = true;
+        traces.ceiling_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_y_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.ground_trace.collided = true;
+        traces.ground_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_pos_z_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.pos_z_trace.collided = true;
+        traces.pos_z_trace.face_normal = face_normal_at_v0;
+    }
+    if (closest_neg_z_face_idx != -1)
+    {
+        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx].position;
+        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 1].position;
+        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 2].position;
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        traces.neg_z_trace.collided = true;
+        traces.neg_z_trace.face_normal = face_normal_at_v0;
+    }
+
+    return traces;
+}
+
+
+                // collide at the old position.
+                // just do "floor" collision.
+                // vec3 aabb_negative_y_normal{0.0f,-1.0f,0.0f};
+                // size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, aabb_negative_y_normal, 10.f);
+
+                // // set trace information
+                // if (traces.ground_trace.collided)
+                // {
+                //     auto& v0 = aabbs_vertices[closest_face_idx].position;
+                //     auto& v1 = aabbs_vertices[closest_face_idx + 1].position;
+                //     auto& v2 = aabbs_vertices[closest_face_idx + 2].position;
+                //     vec3 e0 =  normalize(v1 - v0);
+                //     vec3 e1 =  normalize(v2 - v0);
+                //     vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+                //     trace.collided = true;
+                //     trace.face_normal = face_normal_at_v0; 
+                // }
+                // else
+                // {
+                //     trace.collided = false;
+                //     trace.face_normal = vec3{0.0f,0.0f,0.0f};
+                // }
+
+                // color that one white.
+                // if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
+                // {  
+
+                //     if (previous_closest_face_idx != -1)
+                //     {
+                //         // restore the previous colors.
+                //         GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
+                //         std::array<vertex_xnc, 3> previous_closest_face{};
+                //         previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
+                //         previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
+                //         previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
+
+                //         previous_closest_face[0].color = previous_face_color;
+                //         previous_closest_face[1].color = previous_face_color;
+                //         previous_closest_face[2].color = previous_face_color;
+
+                //         GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                //         glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
+
+                //         glBindBuffer(GL_ARRAY_BUFFER, 0);
+                //         glBindVertexArray(0);
+                //     }
+
+                //     glBindVertexArray(aabb_gl_buffer.VAO); 
+                //     glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+
+                //     GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
+                //     std::array<vertex_xnc, 3> closest_face{};
+                //     closest_face[0] = aabbs_vertices[closest_face_idx];
+                //     closest_face[1] = aabbs_vertices[closest_face_idx + 1];
+                //     closest_face[2] = aabbs_vertices[closest_face_idx + 2];
+                //     vec4 face_color = closest_face[0].color;
+                //     // store this color so we can restore it
+                //     closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                //     closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                //     closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+
+                //     GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                //     glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
+                //     previous_closest_face_idx = closest_face_idx;
+                //     previous_face_color = face_color;
+
+                // }
+
+
+
+                    // draw the player collision aabb in front of us.
+    auto player_aabb_vertices = to_vertex_xnc(player_aabb);
+    auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
+
+
+
+
+
+inline size_t find_closest_proximity_face_index_with_world_axis(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer, const vec3& position, const vec3& world_axis, float distance_treshold)
+{
+    // any angle that is between 0 and 80 degrees from up is a floor.
+    constexpr auto pm_floor_angle_treshold_deg = 80.f;
+
+    const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
+
+    if (bsp == nullptr)
+    {
+        return SENTINEL_FACE_IDX_NOT_FOUND;
+    }
+
+    auto& v0 = all_faces_buffer[bsp->face_idx].position;
+    auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
+    auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
+
+    // how close are we actually? if we are in the plane described by the triangle, or even if we are not.
+    float distance = point_to_triangle_distance(position, v0, v1, v2);
+    // ok, this is close enough.
+    if (distance < distance_treshold)
+    {
+        vec3 e0 =  normalize(v1 - v0);
+        vec3 e1 =  normalize(v2 - v0);
+        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+
+        //  calculate the angle w.r.t the world angle.
+        auto dot_product=  dot(face_normal_at_v0, world_axis);
+        float floor_angle = acos(dot_product);
+        if (fabs(dot_product) < 0.000001f)//@FIXME: formalize this. if the up vector and the wall vector are orthogonal, the dot product is zero and we are just dealing with noise.
+        {
+            // do nothing.
+        }
+        else if (floor_angle < pm_floor_angle_treshold_deg && floor_angle > -pm_floor_angle_treshold_deg)
+        {
+            return bsp->face_idx;
+        }
+    }
+
+    BSP* first_branch = nullptr;
+    BSP* second_branch = nullptr;
+
+    // behind. start exhausting the back planes first.
+    if (distance < 0.0f)
+    {
+        first_branch = bsp->back;
+        second_branch = bsp->front;
+    }
+    else // in front. start exhausting the front planes first.
+    {
+        first_branch = bsp->front;
+        second_branch = bsp->back;
+    }
+
+    size_t first_face_index = find_closest_proximity_face_index_with_world_axis(first_branch, all_faces_buffer, position, world_axis, distance_treshold);
+    if (first_face_index != SENTINEL_FACE_IDX_NOT_FOUND)
+    {
+        return first_face_index;
+    }
+
+    // Check the second branch. 
+    return find_closest_proximity_face_index_with_world_axis(second_branch, all_faces_buffer, position, world_axis, distance_treshold);
+}
+
+
+
+// the bsp should also have a pointer to the buffer it is based on, I guess?
+// FIXME: cleaner would be std::pair<bool found, size_t index>.
+inline size_t find_closest_proximity_face_index(BSP* bsp, const std::vector<vertex_xnc>& all_faces_buffer,const vec3& position, float distance_treshold)
+{
+    const size_t SENTINEL_FACE_IDX_NOT_FOUND = -1;
+
+    if (bsp == nullptr)
+    {
+        return SENTINEL_FACE_IDX_NOT_FOUND;
+    }
+
+    auto& v0 = all_faces_buffer[bsp->face_idx].position;
+    auto& v1 = all_faces_buffer[bsp->face_idx + 1].position;
+    auto& v2 = all_faces_buffer[bsp->face_idx + 2].position;
+
+    // how close are we actually? if we are in the plane described by the triangle, or even if we are not.
+    float distance = point_to_triangle_distance(position, v0, v1, v2);
+
+    // ok, this is it.
+    if (distance < distance_treshold)
+    {
+        return bsp->face_idx;
+    }
+
+    BSP* first_branch = nullptr;
+    BSP* second_branch = nullptr;
+
+    // behind. start exhausting the back planes first.
+    if (distance < 0.0f)
+    {
+        first_branch = bsp->back;
+        second_branch = bsp->front;
+    }
+    else // in front. start exhausting the front planes first.
+    {
+        first_branch = bsp->front;
+        second_branch = bsp->back;
+    }
+
+    size_t first_face_index = find_closest_proximity_face_index(first_branch, all_faces_buffer, position, distance_treshold);
+    if (first_face_index != SENTINEL_FACE_IDX_NOT_FOUND)
+    {
+        return first_face_index;
+    }
+
+    // Check the second branch. 
+    return find_closest_proximity_face_index(second_branch, all_faces_buffer, position, distance_treshold);
+}
+
+
+
+
+
+    // BSP* first_branch = nullptr;
+    // BSP* second_branch = nullptr;
+
+    // if (distance >= 0.0f)
+    // {
+    //     // The point is on the front side of the plane
+    //     first_branch = bsp->front;
+    //     second_branch = bsp->back;
+    // } else {
+    //     // The point is on the back side of the plane
+    //     first_branch = bsp->back;
+    //     second_branch = bsp->front;
+    // }
+
+
+    // // Recursively search the first branch (closer to the position)
+    // size_t closest_index_first = find_closest_proximity_face_index(first_branch, all_faces_buffer, position);
+
+    // // Check the current BSP node's face as a potential candidate
+    // float closest_distance = FLT_MAX;
+    // size_t closest_face_index = -1; // sentinel value
+
+    // if (closest_index_first != -1)
+    // {
+    //     // Calculate distance to the closest face in the first branch
+    //     vec3 closest_point_on_face = get_closest_point_on_face(all_faces_buffer[closest_index_first], position);
+    //     closest_distance = distance_between(position, closest_point_on_face);
+    //     closest_face_index = closest_index_first;
+    // }
+
+    // // Check the current face's distance
+    // vec3 closest_point_on_current_face = get_closest_point_on_face(v0, v1, v2, position);
+    // float distance_to_current_face = distance_between(position, closest_point_on_current_face);
+
+    // if (distance_to_current_face < closest_distance) {
+    //     closest_face_index = bsp->index_of_face;
+    //     closest_distance = distance_to_current_face;
+    // }
+
+    // // Recursively search the second branch (further from the position)
+    // size_t closest_index_second = find_closest_proximity_face_index(second_branch, all_faces_buffer, position);
+
+    // if (closest_index_second != -1) {
+    //     vec3 closest_point_on_face = get_closest_point_on_face(all_faces_buffer[closest_index_second], position);
+    //     float distance_to_second_face = distance_between(position, closest_point_on_face);
+
+    //     if (distance_to_second_face < closest_distance) {
+    //         closest_face_index = closest_index_second;
+    //     }
+    // }
+
+    // return closest_face_index;

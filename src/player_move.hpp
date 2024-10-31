@@ -1,5 +1,7 @@
 #pragma once
 #include <print>
+#include "plane.hpp"
+
 
 
 /// this should also not be here but it is for now.
@@ -108,7 +110,6 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
 {
     constexpr auto pm_maxspeed = 320.f; //@VOLATILE: also in my move.
 
-    // collide with the ground.
 
     // clip the speed in the horizontal plane to maxspeed.
     float speed = sqrt(new_velocity.x * new_velocity.x + new_velocity.z * new_velocity.z);
@@ -122,7 +123,6 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
         new_vector = new_vector * speed;
         new_velocity = vec3{new_vector.x, y, new_vector.z};
     }
-
 
     vec3 position = old_position + (new_velocity * dt);
 
@@ -219,6 +219,21 @@ inline bool check_jump(const Move_Input& input)
 }
 
 
+// new clip vector
+// inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce) {
+//     // Calculate the component of `in` along `normal`
+//     float backoff = dot(in, normal) * overbounce;
+
+//     // Generate the "change" vector along the normal
+//     vec3 change = normal * backoff;
+
+//     // Subtract the "change" component from `in` to get the clipped vector
+//     vec3 result = in - change;
+
+//     return result;
+// }
+
+// old clip vector
 inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 {
 	// how strong is the incoming vector in the direction of the face normal? (i.e. we split the incoming vector in two parts: the one that is parallel to the normal,
@@ -245,6 +260,7 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 std::tuple<vec3, vec3> my_walk_move(
 	Move_Input& input,
     const AABB_Traces& traces,
+    const std::vector<Plane>& collider_planes,
     const vec3 old_position,
     const vec3 old_velocity,
     const vec3 front,
@@ -254,9 +270,9 @@ std::tuple<vec3, vec3> my_walk_move(
 	constexpr auto pm_input_axial_extreme = 127.0f;	
 	constexpr auto pm_maxspeed = 320.f; 
 	constexpr auto pm_ground_acceleration = 10.f; 
-	constexpr auto pm_air_acceleration = 5.0f;
+	// constexpr auto pm_air_acceleration = 5.0f; FIXME: this is disabled
 	constexpr auto pm_overbounce = 1.001f;
-    constexpr auto pm_movement_treshold = 0.00001f; //minimum necessary movement in either axis.
+    // constexpr auto pm_movement_treshold = 0.00001f; //minimum necessary  movement in either axis.
     constexpr auto pm_jumpspeed = 270.f;
 
     // we know we were walking when we got here.
@@ -287,30 +303,12 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 front_clipped = front_without_y;
     vec3 right_clipped = right_without_y;
     
+    // this does not scale. that's kind of annoying. 
     if (traces.ground_trace.collided)
     {
         front_clipped = clip_vector(front_without_y, traces.ground_trace.face_normal, pm_overbounce);
         right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
-
-    // if (traces.pos_z_trace.collided)
-    // {
-    //     std::print("clipping the input vector for pos_z..\n");
-    //     std::print("right_clipped: {}\n", right_clipped);
-    //     std::print("front_clipped: {}\n", front_clipped);
-    //     right_clipped = clip_vector(right_clipped, traces.pos_z_trace.face_normal, pm_overbounce);
-    //     front_clipped = clip_vector(front_clipped, traces.pos_z_trace.face_normal, pm_overbounce);
-
-    //     std::print("right_clipped AFTER: {}\n", right_clipped);
-    //     std::print("front_clipped AFTER: {}\n", front_clipped);
-    // }
-    // if (traces.neg_z_trace.collided)
-    // {
-    //     right_clipped = clip_vector(right_clipped, traces.neg_z_trace.face_normal, pm_overbounce);
-    //     front_clipped = clip_vector(front_clipped, traces.neg_z_trace.face_normal, pm_overbounce);
-    // }
-
-
 
  	bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
@@ -382,10 +380,17 @@ std::tuple<vec3, vec3> my_walk_move(
 
 
     //@FIXME: do this again for all planes?
-    new_speed = length(new_velocity);
-    new_velocity = clip_vector(new_velocity, traces.pos_z_trace.face_normal, pm_overbounce);
-    new_velocity = normalize(new_velocity);
-    new_velocity = new_speed * new_velocity;
+    for (auto& collider_plane: collider_planes)
+    {
+        new_speed = length(new_velocity);
+        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
+        new_velocity = normalize(new_velocity);
+        new_velocity = new_speed * new_velocity;
+    }
+    
+
+
+
 
 
 
@@ -533,17 +538,38 @@ std::tuple<vec3, vec3> my_air_move(
     return step_air_move(old_position, new_velocity, dt);
 }
 
-
-
+// new_player_position, new_player_velocity
 std::tuple<vec3, vec3> player_move(
     Move_Input& input,
-    AABB_Traces& traces,
+    std::vector<Plane>& collider_planes, // self-evident, I guess.@FIXME: this is not const because we remove an element later for the ground plane. yikes.
     const vec3& old_position,
     const vec3& old_velocity,
     const vec3& front,
     const vec3& right,
     const float dt)
 {
+    auto traces = AABB_Traces{};
+
+    // what is the ground plane? do we have a ground plane? is there only one? 
+    // let's just take 45 degrees for now.
+    // just pick the first ground plane?
+    auto plane_idx = 0;
+    for (auto& collider_plane: collider_planes)
+    {
+        std::print("collider_plane: {}\n", collider_plane);
+        auto angle = dot(vec3{0.0f, -1.0f, 0.0f}, collider_plane.normal);
+        if ( angle < -0.5f)
+        {
+            traces.ground_trace.collided = true;
+            traces.ground_trace.face_normal = collider_plane.normal;
+            std::print("angle: {}\n", angle);
+            break;
+        }
+        ++plane_idx;
+    }
+    // remove the ground plane from the collider planes.
+    if (traces.ground_trace.collided) collider_planes.erase(collider_planes.begin() + plane_idx);
+
     auto& ground_trace = traces.ground_trace;
     // we are grounded if (and only if):
     // - the ground trace hits.
@@ -555,7 +581,7 @@ std::tuple<vec3, vec3> player_move(
         //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move asumes that we are grounded.
         // I do not really like that.
         vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
-        return my_walk_move(input, traces, old_position, old_velocity_without_y, front, right, dt);
+        return my_walk_move(input, traces, collider_planes, old_position, old_velocity_without_y, front, right, dt);
     }
     else
     {

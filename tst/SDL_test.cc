@@ -12,7 +12,7 @@
 
 #include <print>
 #include <array>
-
+// #include <chrono>
 #include "../src/input.hpp"
 #include "../src/gl_helpers.hpp"
 #include "../src/AABB.hpp"
@@ -20,6 +20,15 @@
 #include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
 #include "../src/player_move.hpp"
+
+
+#define TIMEIT(stmt) do { \
+    auto start = std::chrono::high_resolution_clock::now(); \
+    stmt; \
+    auto end = std::chrono::high_resolution_clock::now(); \
+    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start); \
+    std::print("{} took {:.3f} ms\n", #stmt, diff.count() / 1000.0); \
+} while(0)
 
 // there is a better abstraction here that will come later.
 static void draw_triangles(
@@ -179,101 +188,6 @@ uint32_t create_interleaved_xnc_shader_program()
     return shader_program;
 }
 
-AABB_Traces yield_aabb_trace_against_bsp(BSP* bsp, const std::vector<vertex_xnc>& vertices_used_to_create_the_bsp, vec3 player_position, float distance)
-{
-    AABB_Traces traces{};
-
-    vec3 pos_x_normal = vec3{ 1.0f,  0.0f,  0.0f}; 
-    vec3 neg_x_normal = vec3{-1.0f,  0.0f,  0.0f}; 
-    vec3 pos_y_normal = vec3{ 0.0f,  1.0f,  0.0f}; 
-    vec3 neg_y_normal = vec3{ 0.0f, -1.0f,  0.0f}; 
-    vec3 pos_z_normal = vec3{ 0.0f,  0.0f,  1.0f}; 
-    vec3 neg_z_normal = vec3{ 0.0f,  0.0f, -1.0f}; 
-
-    size_t closest_pos_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_x_normal, distance);
-    size_t closest_neg_x_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_x_normal, distance);
-    size_t closest_pos_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_y_normal, distance);
-    size_t closest_neg_y_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_y_normal, distance);
-    size_t closest_pos_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, pos_z_normal, distance);
-    size_t closest_neg_z_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, vertices_used_to_create_the_bsp, player_position, neg_z_normal, distance);
-
-    if (closest_pos_x_face_idx != -1)
-    {
-
-        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_x_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.pos_x_trace.collided = true;
-        traces.pos_x_trace.face_normal = face_normal_at_v0;
-    }
-    if (closest_neg_x_face_idx != -1)
-    {
-        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_x_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.neg_x_trace.collided = true;
-        traces.neg_x_trace.face_normal = face_normal_at_v0;
-    }
-    if (closest_pos_y_face_idx != -1)
-    {
-            auto& v0 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_y_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.ceiling_trace.collided = true;
-        traces.ceiling_trace.face_normal = face_normal_at_v0;
-    }
-    if (closest_neg_y_face_idx != -1)
-    {
-        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_y_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.ground_trace.collided = true;
-        traces.ground_trace.face_normal = face_normal_at_v0;
-    }
-    if (closest_pos_z_face_idx != -1)
-    {
-        auto& v0 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_pos_z_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.pos_z_trace.collided = true;
-        traces.pos_z_trace.face_normal = face_normal_at_v0;
-    }
-    if (closest_neg_z_face_idx != -1)
-    {
-        auto& v0 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx].position;
-        auto& v1 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 1].position;
-        auto& v2 = vertices_used_to_create_the_bsp[closest_neg_z_face_idx + 2].position;
-        vec3 e0 =  normalize(v1 - v0);
-        vec3 e1 =  normalize(v2 - v0);
-        vec3 face_normal_at_v0 = normalize(cross(e0, e1));
-
-        traces.neg_z_trace.collided = true;
-        traces.neg_z_trace.face_normal = face_normal_at_v0;
-    }
-
-    return traces;
-}
-
 
 
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
@@ -394,12 +308,14 @@ int main(int argc, char *argv[])
     }    
     // shaders related
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-    uint32_t x_shader_program = create_x_shader_program();
+    // uint32_t x_shader_program = create_x_shader_program();
 
     // base AABB.
     auto path = std::string{"../data/list_of_AABB"};
     auto aabbs = read_AABBs_from_file(path);
     auto aabbs_vertices  = to_vertex_xnc(aabbs);
+    // i do not trust auto assignment.
+    std::vector<vertex_xnc> base_aabbs_vertices = aabbs_vertices;
     auto aabb_gl_buffer = create_interleaved_xnc_buffer(aabbs_vertices);
     BSP* bsp = nullptr;
     {
@@ -466,17 +382,11 @@ int main(int argc, char *argv[])
     // entity related
     vec3 player_velocity{};
     vec3 player_position{-6.0320406, 10, 580.2726};
-    auto player_aabb = AABB{.min = vec3{-5.0f, 0.0f, 0.0f}, .max = {5.0f, 20.f, 10.f}};
+    auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}};
     Move_Input move_input{};
     Trace trace{};
 
-    // coloring the bsp found things
-    size_t previous_closest_face_idx = -1;
-    vec4 previous_face_color{0.0f,0.0f,0.0f, 1.0f};
-
-    // draw the player collision aabb in front of us.
-    auto player_aabb_vertices = to_vertex_xnc(player_aabb);
-    auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
+    std::vector<size_t> previous_face_indices{};
 
     while (running)
     {
@@ -492,6 +402,7 @@ int main(int argc, char *argv[])
         last_mouse_x = mouse_x;
         last_mouse_y = mouse_y;
 
+        // handle quitting etc.
          while (SDL_PollEvent(&event))
         {
             // ignore all events except quit (alt-f4, pressing x, etc)
@@ -522,11 +433,11 @@ int main(int argc, char *argv[])
             if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
 
             // Handle continuous key press movement
-            move_input.forward_pressed = key_state[SDL_SCANCODE_W];
+            move_input.forward_pressed  = key_state[SDL_SCANCODE_W];
             move_input.backward_pressed = key_state[SDL_SCANCODE_S];
-            move_input.left_pressed = key_state[SDL_SCANCODE_A];
-            move_input.right_pressed = key_state[SDL_SCANCODE_D];
-            move_input.jump_pressed = key_state[SDL_SCANCODE_SPACE];
+            move_input.left_pressed     = key_state[SDL_SCANCODE_A];
+            move_input.right_pressed    = key_state[SDL_SCANCODE_D];
+            move_input.jump_pressed     = key_state[SDL_SCANCODE_SPACE];
 
             if (key_state[SDL_SCANCODE_P])
             {
@@ -536,77 +447,67 @@ int main(int argc, char *argv[])
             }
 
             // collision detection.
+            std::vector<size_t> face_indices;
             {
 
-                // collide at the old position.
-                // just do "floor" collision.
-                // vec3 aabb_negative_y_normal{0.0f,-1.0f,0.0f};
-                // size_t closest_face_idx = find_closest_proximity_face_index_with_world_axis(bsp, aabbs_vertices, player_position, aabb_negative_y_normal, 10.f);
+                // restore color to the previous face_indices
+                for (auto& face_idx: previous_face_indices)
+                {
+                    std::array<vertex_xnc, 3> intersecting_face{
+                        base_aabbs_vertices[face_idx],
+                        base_aabbs_vertices[face_idx + 1],
+                        base_aabbs_vertices[face_idx + 2]
+                    };
+                    auto face_offset = face_idx * sizeof(vertex_xnc);
+                
+                    // color the triangle white.
+                    glBindVertexArray(aabb_gl_buffer.VAO); 
+                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
 
-                // // set trace information
-                // if (traces.ground_trace.collided)
-                // {
-                //     auto& v0 = aabbs_vertices[closest_face_idx].position;
-                //     auto& v1 = aabbs_vertices[closest_face_idx + 1].position;
-                //     auto& v2 = aabbs_vertices[closest_face_idx + 2].position;
-                //     vec3 e0 =  normalize(v1 - v0);
-                //     vec3 e1 =  normalize(v2 - v0);
-                //     vec3 face_normal_at_v0 = normalize(cross(e0, e1));
+                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                    glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
 
-                //     trace.collided = true;
-                //     trace.face_normal = face_normal_at_v0; 
-                // }
-                // else
-                // {
-                //     trace.collided = false;
-                //     trace.face_normal = vec3{0.0f,0.0f,0.0f};
-                // }
+                    glBindVertexArray(0);
+                }
 
-                // color that one white.
-                // if (closest_face_idx != -1 && !(closest_face_idx == previous_closest_face_idx))
-                // {  
 
-                //     if (previous_closest_face_idx != -1)
-                //     {
-                //         // restore the previous colors.
-                //         GLsizeiptr previous_closest_face_offset = previous_closest_face_idx * sizeof(vertex_xnc);
-                //         std::array<vertex_xnc, 3> previous_closest_face{};
-                //         previous_closest_face[0] = aabbs_vertices[previous_closest_face_idx];
-                //         previous_closest_face[1] = aabbs_vertices[previous_closest_face_idx + 1];
-                //         previous_closest_face[2] = aabbs_vertices[previous_closest_face_idx + 2];
+                // update player_aabb to world space.
+                auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
 
-                //         previous_closest_face[0].color = previous_face_color;
-                //         previous_closest_face[1].color = previous_face_color;
-                //         previous_closest_face[2].color = previous_face_color;
 
-                //         GLsizeiptr pcf_size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                //         glBufferSubData(GL_ARRAY_BUFFER, previous_closest_face_offset, pcf_size, (void*)previous_closest_face.data());
+                face_indices = bsp_collide_with_AABB(bsp, aabb, aabbs_vertices);
 
-                //         glBindBuffer(GL_ARRAY_BUFFER, 0);
-                //         glBindVertexArray(0);
-                //     }
+                // color the intersecting face indices white.
+                for (auto& face_idx: face_indices)
+                {
 
-                //     glBindVertexArray(aabb_gl_buffer.VAO); 
-                //     glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                    std::array<vertex_xnc, 3> intersecting_face{
+                        aabbs_vertices[face_idx],
+                        aabbs_vertices[face_idx + 1],
+                        aabbs_vertices[face_idx + 2]
+                    };
+                
+                    intersecting_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    intersecting_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    intersecting_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                    
+                    intersecting_face[0].position = 1.05 * intersecting_face[0].position;
+                    intersecting_face[1].position = 1.05 * intersecting_face[1].position;
+                    intersecting_face[2].position = 1.05 * intersecting_face[2].position;
 
-                //     GLsizeiptr closest_face_offset = closest_face_idx * sizeof(vertex_xnc);
-                //     std::array<vertex_xnc, 3> closest_face{};
-                //     closest_face[0] = aabbs_vertices[closest_face_idx];
-                //     closest_face[1] = aabbs_vertices[closest_face_idx + 1];
-                //     closest_face[2] = aabbs_vertices[closest_face_idx + 2];
-                //     vec4 face_color = closest_face[0].color;
-                //     // store this color so we can restore it
-                //     closest_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                //     closest_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                //     closest_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
 
-                //     GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                //     glBufferSubData(GL_ARRAY_BUFFER, closest_face_offset, size, (void*)closest_face.data());
-                //     previous_closest_face_idx = closest_face_idx;
-                //     previous_face_color = face_color;
+                    // color the triangle white.
+                    glBindVertexArray(aabb_gl_buffer.VAO); 
+                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                    auto face_offset = face_idx * sizeof(vertex_xnc);
 
-                // }
+                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                    glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
 
+                    glBindVertexArray(0);
+                }
+
+                previous_face_indices = face_indices;
             }
 
             if (!noclip)
@@ -614,11 +515,20 @@ int main(int argc, char *argv[])
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
 
-                auto traces = yield_aabb_trace_against_bsp(bsp, aabbs_vertices, player_position, 10.f);
-                
+                // using traces is misguided. but it is nice to know what the ground trace is / if we have a ground trace. I guess. I will just pass in the set of planes. construct them here.
+                // auto traces = AABB_Traces{};
+
+                // plane is combination of v0 and the calculated normal.
+                std::vector<Plane> collider_planes{};
+                for (auto& face_idx:face_indices)
+                {
+                    collider_planes.push_back(Plane{aabbs_vertices[face_idx].position, compute_normal(aabbs_vertices[face_idx].position, aabbs_vertices[face_idx + 1].position, aabbs_vertices[face_idx + 2].position)});
+                }
+
+
                 auto [new_position, new_velocity] = player_move(
                     move_input,
-                    traces,
+                    collider_planes,
                     player_position,
                     player_velocity,
                     vec3{camera.front.x, camera.front.y, camera.front.z},
