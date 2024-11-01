@@ -124,6 +124,9 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
         new_velocity = vec3{new_vector.x, y, new_vector.z};
     }
 
+    
+
+
     vec3 position = old_position + (new_velocity * dt);
 
     // test if we can actually be at the new position (collide with the environment and push back). for now, we take this to be y = 10.f;
@@ -310,6 +313,9 @@ std::tuple<vec3, vec3> my_walk_move(
         right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
 
+    front_clipped = normalize(front_clipped);
+    right_clipped = normalize(right_clipped);
+
  	bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
                            input.left_pressed     ||
@@ -320,15 +326,21 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 wish_direction = front_clipped * forward_input + right_clipped * right_input;
     vec3 normalized_wish_direction = normalize(wish_direction);
 
+    std::print("normalized_wish_direction: {}\n", normalized_wish_direction);
+
     float input_scale = calculate_input_scale(forward_input, right_input, up_input, pm_maxspeed, pm_input_axial_extreme);
     float wish_speed = 0.0f; // we set this because I think some float weirdness happens when taking the length of wish_direction when it is 0.
 
+    std::print("input_scale: {}\n", input_scale);
     if (received_input)
     {
     	// how hard did we move the joystick? -127... +127. button presses are always max (127) or min (127).
     	// this makes the "wish" direction (the one purely based on input) less strong.
         wish_speed  = input_scale * length(wish_direction);
     } 
+
+    //@FIXME: wish speed goes haywire if we look up very hard. because the length of the wish direction is very small. I guess because
+    // front_clipped is very small?
 
     vec3 new_velocity{};
 
@@ -380,16 +392,6 @@ std::tuple<vec3, vec3> my_walk_move(
 
 
     //@FIXME: do this again for all planes?
-    for (auto& collider_plane: collider_planes)
-    {
-        new_speed = length(new_velocity);
-        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
-        new_velocity = normalize(new_velocity);
-        new_velocity = new_speed * new_velocity;
-    }
-    
-
-
 
 
 
@@ -556,13 +558,11 @@ std::tuple<vec3, vec3> player_move(
     auto plane_idx = 0;
     for (auto& collider_plane: collider_planes)
     {
-        std::print("collider_plane: {}\n", collider_plane);
-        auto angle = dot(vec3{0.0f, -1.0f, 0.0f}, collider_plane.normal);
-        if ( angle < -0.5f)
+        auto angle = dot(vec3{0.0f, 1.0f, 0.0f}, collider_plane.normal);
+        if ( angle >= 0.707f)
         {
             traces.ground_trace.collided = true;
             traces.ground_trace.face_normal = collider_plane.normal;
-            std::print("angle: {}\n", angle);
             break;
         }
         ++plane_idx;

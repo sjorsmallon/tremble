@@ -2,35 +2,11 @@
 #include <glad/glad.h>
 #include <vector>
 
-
-#include "../src/vertex.hpp"
+#include "debug_draw.hpp"
+#include "vertex.hpp"
 #include "vec.hpp"
 #include <iostream>
 #include <fstream>
-
-std::string file_to_string(const std::string& filename)
-{
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("Could not open file: " + filename);
-    }
-
-    file.seekg(0, std::ios::end);
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    std::string content;
-    content.resize(size);
-
-    if (!file.read(&content[0], size))
-    {
-        throw std::runtime_error("Error reading file: " + filename);
-    }
-
-    return content;
-}
-
-
 
 // openGL error callback
 void GLAPIENTRY opengl_message_callback(
@@ -69,6 +45,30 @@ void GLAPIENTRY opengl_message_callback(
         }
     }
 }
+
+
+std::string file_to_string(const std::string& filename)
+{
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
+
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::string content;
+    content.resize(size);
+
+    if (!file.read(&content[0], size))
+    {
+        throw std::runtime_error("Error reading file: " + filename);
+    }
+
+    return content;
+}
+
 
 inline void set_global_gl_settings()
 {
@@ -523,9 +523,120 @@ std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, co
 }
 
 
-
-// where do I supply the VAO, VBO, and the shader program from? I do not understand how to do this without making a huge global dependency stack.
-void debug_draw_arrow(vec3 start, vec3 end)
+inline uint32_t create_interleaved_xnc_shader_program()
 {
+    const char* vertex_shader_src = R"(
+        #version 410
+        layout(location = 0) in vec3 position_vert_in;
+        layout(location = 1) in vec3 normal_vert_in;
+        layout(location = 2) in vec4 color_vert_in;
 
+        
+        layout(location = 0) out vec3 position_frag_in;
+        layout(location = 1) out vec3 normal_frag_in;
+        layout(location = 2) out vec4 color_frag_in;
+        layout(location = 3) out vec3 barycentric;
+        
+        uniform mat4 model; // Model matrix
+        uniform mat4 view;  // View matrix
+        uniform mat4 projection; // Projection matrix
+
+        void main()
+        {
+            // Assigning barycentric coordinates to the vertices
+            if (gl_VertexID % 3 == 0)
+                barycentric = vec3(1.0, 0.0, 0.0); // First vertex
+            else if (gl_VertexID % 3 == 1)
+                barycentric = vec3(0.0, 1.0, 0.0); // Second vertex
+            else // if (gl_VertexID % 3 == 2)
+                barycentric = vec3(0.0, 0.0, 1.0); // Third vertex
+
+            normal_frag_in = mat3(transpose(inverse(model))) * normal_vert_in; // Transform the normal to world space
+            position_frag_in = vec3(model * vec4(position_vert_in, 1.0)); // Transform the vertex position to world space
+            color_frag_in = color_vert_in; // Pass vertex color to fragment shader
+
+            gl_Position = projection * view * vec4(position_frag_in, 1.0); // Apply projection and view transformations
+        })";
+
+    const char* fragment_shader_src = R"(
+        #version 410
+        layout(location = 0) in vec3 position_frag_in;
+        layout(location = 1) in vec3 normal_frag_in;
+        layout(location = 2) in vec4 color_frag_in;
+        layout(location = 3) in vec3 barycentric;
+
+        layout(location = 0) out vec4 color_frag_out;
+
+        float brightness_based_on_barycentric_coordinates(vec3 barycentric_coordinates)
+        {
+            // barycentric coordinates: if one of them is close to zero, that means we are near the "opposite"edge.
+            float edge_factor = min(min(barycentric.x, barycentric.y), barycentric.z);
+                
+            float threshold = 0.05f;  // Adjust this value to control how dark the edges get
+
+            // Create a brightness factor based on the edge proximity
+            float brightness_factor;
+
+            if (edge_factor < threshold)
+            {
+                // Darken the color based on proximity to the edge
+                // Closer to the edge will have more influence on darkening
+                // pick a value between 1.0 and 0.5, based on this value between 0.1).
+                brightness_factor = mix(1.0, 0.5, (threshold - edge_factor) / threshold);
+            } else {
+                // Center is bright
+                brightness_factor = 1.0;
+            }
+
+            return brightness_factor;
+        }
+
+        void main()
+        {
+            float brightness = brightness_based_on_barycentric_coordinates(barycentric);
+            vec4 resulting_color = vec4(color_frag_in.xyz * brightness, 1.0);
+            color_frag_out = resulting_color;
+    })";
+
+    auto shader_program = create_shader_program(
+        vertex_shader_src,
+        fragment_shader_src
+    );
+    return shader_program;
+}
+
+
+
+void debug_draw_arrow(const vec3& start, const vec3& end, float diameter, const vec3& color)
+{
+    static bool first_time = true;
+    static uint32_t arrow_shader_program = 0;
+    static GL_Buffer gl_buffer; // Reusable VAO/VBO buffer
+
+    auto vertices = generate_arrow_vertices(start, end, diameter);
+
+    if (first_time)
+    {
+        arrow_shader_program = create_interleaved_xnc_shader_program();
+        gl_buffer = create_interleaved_xnc_buffer(vertices); // Initialize with an empty vector
+        first_time = false;
+    }
+
+    // Update the VBO with new vertices
+    glBindVertexArray(gl_buffer.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vertex_xnc), vertices.data());
+
+    // Use the shader program
+    glUseProgram(arrow_shader_program);
+
+    // Set any necessary uniforms for the shader (e.g., color, transformations, etc.)
+    set_uniform(arrow_shader_program, "color", color);
+
+    // Draw the arrow
+    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+
+    // Unbind the buffer
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }

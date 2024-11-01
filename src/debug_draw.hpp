@@ -1,6 +1,9 @@
 #pragma once
 #include <cmath>
+#include <vector>
 
+#include "vertex.hpp"
+#include "vec.hpp"
 // actually, it is kind of awful that we store color at every vertex.
 // open question: is it misguided to generate vertices for specific worldspace, instead of providing a model matrix or something like that?
 // i don't care.
