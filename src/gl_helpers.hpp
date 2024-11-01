@@ -523,6 +523,43 @@ std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, co
 }
 
 
+inline uint32_t create_x_shader_program()
+{
+    const char* x_vertex_shader_src = R"(
+    #version 330 core
+
+    layout(location = 0) in vec3 position;
+
+    uniform mat4 model;
+    uniform mat4 view;
+    uniform mat4 projection;
+
+    void main() {
+        gl_Position = projection * view * model * vec4(position, 1.0);
+    }
+    )";
+
+    const char* x_fragment_shader_src = R"(
+    #version 330 core
+
+    out vec4 FragColor;
+
+    void main() {
+        // Hardcoded color
+        FragColor = vec4(1.0, 1.0, 1.0, 1.0); // RGB + Alpha (opacity)
+    }
+    )";
+
+    auto x_shader_program = create_shader_program(
+        x_vertex_shader_src,
+        x_fragment_shader_src
+    );
+
+    return x_shader_program;
+}
+
+
+
 inline uint32_t create_interleaved_xnc_shader_program()
 {
     const char* vertex_shader_src = R"(
@@ -634,6 +671,46 @@ void debug_draw_arrow(const vec3& start, const vec3& end, float diameter, const 
     set_uniform(arrow_shader_program, "color", color);
 
     // Draw the arrow
+    glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+
+    // Unbind the buffer
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+
+void debug_draw_triangles(
+    const std::vector<vertex_xnc>& vertices,
+    const glm::mat4& projection,
+    const glm::mat4& view,
+    const glm::mat4& model)
+{
+    static bool first_time = true;
+    static uint32_t basic_shader_program = 0;
+    static GL_Buffer gl_buffer; // Reusable VAO/VBO buffer
+
+    if (first_time)
+    {
+        basic_shader_program = create_interleaved_xnc_shader_program();
+        gl_buffer = create_interleaved_xnc_buffer(vertices); // Initialize with an empty vector
+        first_time = false;
+    }
+
+    // Update the VBO with new vertices
+    glBindVertexArray(gl_buffer.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+
+    // Allocate or resize the VBO buffer based on the size of vertices
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertex_xnc), vertices.data(), GL_DYNAMIC_DRAW);
+
+    // Use the shader program
+    glUseProgram(basic_shader_program);
+
+    set_uniform(basic_shader_program, "model", model);
+    set_uniform(basic_shader_program, "view", view);
+    set_uniform(basic_shader_program, "projection", projection);
+
+    // Draw the triangles
     glDrawArrays(GL_TRIANGLES, 0, vertices.size());
 
     // Unbind the buffer

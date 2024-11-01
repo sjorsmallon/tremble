@@ -124,8 +124,6 @@ std::tuple<vec3, vec3> step_slide_move(const vec3& old_position, vec3& new_veloc
         new_velocity = vec3{new_vector.x, y, new_vector.z};
     }
 
-    
-
 
     vec3 position = old_position + (new_velocity * dt);
 
@@ -243,6 +241,7 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 	// and the one that is perpendicular to it (along the wall).
     float backoff = dot(in, normal);
 
+
     if (backoff < 0.0f)
     {
         backoff *= overbounce;
@@ -252,10 +251,12 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
         backoff /= overbounce;
     }
 
-    vec3 change = normal * backoff;
+    vec3 change = vec3{0.f,0.f,0.f};
 
-    // in effect: remove the part of the vector that is heading into the wall. just keep the part that was perpendicular.
-    vec3 result = in - change;
+    change = normal * backoff; 
+
+    vec3 result = in - change; // how the fuck does this make sense? -> this doesn't if we are only moving away. we should never be here if we are moving away.
+
 
     return result;
 }
@@ -313,6 +314,7 @@ std::tuple<vec3, vec3> my_walk_move(
         right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
 
+    // don't forget to normalize: if you don't, this will be really small if you look up.
     front_clipped = normalize(front_clipped);
     right_clipped = normalize(right_clipped);
 
@@ -326,21 +328,16 @@ std::tuple<vec3, vec3> my_walk_move(
     vec3 wish_direction = front_clipped * forward_input + right_clipped * right_input;
     vec3 normalized_wish_direction = normalize(wish_direction);
 
-    std::print("normalized_wish_direction: {}\n", normalized_wish_direction);
 
     float input_scale = calculate_input_scale(forward_input, right_input, up_input, pm_maxspeed, pm_input_axial_extreme);
     float wish_speed = 0.0f; // we set this because I think some float weirdness happens when taking the length of wish_direction when it is 0.
 
-    std::print("input_scale: {}\n", input_scale);
     if (received_input)
     {
     	// how hard did we move the joystick? -127... +127. button presses are always max (127) or min (127).
     	// this makes the "wish" direction (the one purely based on input) less strong.
         wish_speed  = input_scale * length(wish_direction);
     } 
-
-    //@FIXME: wish speed goes haywire if we look up very hard. because the length of the wish direction is very small. I guess because
-    // front_clipped is very small?
 
     vec3 new_velocity{};
 
@@ -360,8 +357,6 @@ std::tuple<vec3, vec3> my_walk_move(
     float new_speed  = length(new_velocity);
     new_velocity = clip_vector(new_velocity, traces.ground_trace.face_normal, pm_overbounce);
     
-
-
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
     // if we start seeing nan's, i'll re-enable it. - Sjors, 22-10-2024
@@ -390,11 +385,23 @@ std::tuple<vec3, vec3> my_walk_move(
     new_velocity = normalize(new_velocity);
     new_velocity = new_speed * new_velocity;
 
+    // readjust the velocity for all the collider planes.
+    for (auto& collider_plane: collider_planes)
+    {
+        //@FIXME: I don't understand if this will fix it, but i want to try anyway.
+        // we should not collide with the plane if we are trying to move away from it.
+        
+        new_speed = length(new_velocity);
+        new_velocity = normalize(new_velocity);
+        if (dot(new_velocity, collider_plane.normal) > 0)
+        {
+            new_velocity = new_velocity * new_speed;
+            continue;
+        }
 
-    //@FIXME: do this again for all planes?
-
-
-
+        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
+        new_velocity = new_velocity * new_speed;
+    }
 
     //@Note: this is disabled for now because it apparently does not matter (yet) in the new implementation.
     // if we start seeing nan's, i'll re-enable it. - Sjors, 22-10-2024
@@ -433,6 +440,7 @@ std::tuple<vec3, vec3> my_walk_move(
         std::print ("induced jump speed: {}\n", pm_jumpspeed * input_scale);
         new_velocity.y = (pm_jumpspeed * input_scale);
     }
+
 
     return step_slide_move(old_position, new_velocity, traces.ground_trace, dt);
 }
@@ -527,10 +535,6 @@ std::tuple<vec3, vec3> my_air_move(
     new_velocity = new_speed * new_velocity;
 
 
-    new_speed = length(new_velocity);
-    new_velocity = clip_vector(new_velocity, traces.pos_z_trace.face_normal, pm_overbounce);
-    new_velocity = normalize(new_velocity);
-    new_velocity = new_speed * new_velocity;
 
 
     // apply gravity.

@@ -14,7 +14,7 @@ size_t abs(size_t a, size_t b) {
     return (a > b) ? (a - b) : (b - a);
 }
 
-inline vec3 compute_normal(const vec3& p0, const vec3& p1, const vec3& p2) {
+inline vec3 compute_triangle_normal(const vec3& p0, const vec3& p1, const vec3& p2) {
     vec3 edge1 = p1 - p0;
     vec3 edge2 = p2 - p0;
     return normalize(cross(edge1, edge2));
@@ -220,7 +220,7 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 				back_indices.push_back(other_idx);
 			}
 
-			if (partition_result == Partition_Result::STRADDLING) // we should actually split I think.
+			if (partition_result == Partition_Result::STRADDLING) // we should actually split I think ->FIXME: YES WE SHOULD! this causes double indices to appear in collision detection.
 			{
 				front_indices.push_back(other_idx);
 				back_indices.push_back(other_idx);
@@ -253,6 +253,50 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 	bsp->back = build_bsp(best_back_indices, all_faces_buffer);
 
 	return bsp;
+}
+
+
+
+float calculate_penetration_depth(const vec3& point, const vec3& plane_normal, const vec3& point_on_plane)
+{
+    // Calculate signed distance
+    return dot(point - point_on_plane, plane_normal);
+}
+
+float calculate_penetration_depth_triangle(const vec3& aabb_center, const vec3& triangle_normal, const vec3& triangle_point)
+{
+    return dot(aabb_center - triangle_point, triangle_normal);
+}
+
+float calculate_max_penetration_depth(const AABB& aabb, 
+                                       const vec3& triangle_vertex0, const vec3& triangle_vertex1, const vec3& triangle_vertex2) {
+    std::vector<vec3> aabb_vertices = {
+        vec3{aabb.min.x, aabb.min.y, aabb.min.z}, // min corner
+        vec3{aabb.min.x, aabb.min.y, aabb.max.z}, // front bottom left
+        vec3{aabb.min.x, aabb.max.y, aabb.min.z}, // back bottom left
+        vec3{aabb.min.x, aabb.max.y, aabb.max.z}, // back top left
+        vec3{aabb.max.x, aabb.min.y, aabb.min.z}, // min corner
+        vec3{aabb.max.x, aabb.min.y, aabb.max.z}, // front bottom right
+        vec3{aabb.max.x, aabb.max.y, aabb.min.z}, // back bottom right
+        vec3{aabb.max.x, aabb.max.y, aabb.max.z}  // back top right
+    };
+
+    vec3 triangle_normal = compute_triangle_normal(triangle_vertex0, triangle_vertex1, triangle_vertex2);
+    vec3 triangle_point = triangle_vertex0; // Any vertex on the triangle can be used as a point on the plane.
+
+    float max_penetration_depth = std::numeric_limits<float>::lowest();
+
+    // Loop through each vertex of the AABB
+    for (const vec3& vertex : aabb_vertices) {
+        float penetration_depth = calculate_penetration_depth_triangle(vertex, triangle_normal, triangle_point);
+
+        if (penetration_depth > max_penetration_depth)
+        {
+            max_penetration_depth = penetration_depth;
+        }
+    }
+
+    return max_penetration_depth;
 }
 
 
@@ -357,7 +401,7 @@ inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, con
         const vec3& v2 = all_faces_buffer[node->face_idx + 2].position;
         
         // Compute the face normal
-        vec3 normal = compute_normal(v0, v1, v2);
+        vec3 normal = compute_triangle_normal(v0, v1, v2);
         
         // Classify the AABB's position relative to the current plane
         Partition_Result side = classify_aabb_against_plane(aabb, normal, v0);
@@ -372,9 +416,21 @@ inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, con
             traverse(node->back);
 
             // we are straddling the plane, but are we actually colliding?
-            if (triangle_intersects_aabb(v0, v1, v2,aabb))
+            if (triangle_intersects_aabb(v0, v1, v2, aabb))
             {
-                colliding_faces.push_back(node->face_idx);
+                // FIXME(Sjors): formalize this value. I "found" it by walking across multiple aabb and getting the lowest one,
+                // which I think is the side of the adjacent aabb.
+                // are we intersecting by a large enough "penetration depth"?
+                float max_penetration_depth = calculate_max_penetration_depth(
+                    aabb,
+                    v0, v1 , v2);
+                
+                std::print("normal: {}\n", normal);
+                if (normal.x > 0.1f || normal.x < -0.1f) std::print("max_penetration_depth: {}\n", max_penetration_depth);
+                
+                // we will filter out other things later. where this is called.
+                // if (max_penetration_depth > 2.f)
+                 colliding_faces.push_back(node->face_idx);
             }
         }
     };

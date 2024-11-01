@@ -277,3 +277,32 @@ inline std::vector<vertex_xnc> to_vertex_xnc(std::vector<AABB>& aabbs)
 
 	return all_vertices;
 }
+
+
+
+AABB create_aabb_from_triangle(const vec3& v0, const vec3& v1, const vec3& v2) {
+    // Initialize min and max points with the coordinates of the first vertex
+    vec3 min_point = v0;
+    vec3 max_point = v0;
+
+    // Compare with the second vertex
+    min_point.x = std::min(min_point.x, v1.x);
+    min_point.y = std::min(min_point.y, v1.y);
+    min_point.z = std::min(min_point.z, v1.z);
+
+    max_point.x = std::max(max_point.x, v1.x);
+    max_point.y = std::max(max_point.y, v1.y);
+    max_point.z = std::max(max_point.z, v1.z);
+
+    // Compare with the third vertex
+    min_point.x = std::min(min_point.x, v2.x);
+    min_point.y = std::min(min_point.y, v2.y);
+    min_point.z = std::min(min_point.z, v2.z);
+
+    max_point.x = std::max(max_point.x, v2.x);
+    max_point.y = std::max(max_point.y, v2.y);
+    max_point.z = std::max(max_point.z, v2.z);
+
+    // Return the constructed AABB
+    return { min_point, max_point };
+}

@@ -10,6 +10,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
+#include <unordered_set>
+
 #include <print>
 #include <array>
 // #include <chrono>
@@ -38,9 +40,19 @@ static void draw_triangles(
     const uint32_t shader_program,
     const glm::mat4& projection,
     const glm::mat4& view,
-    const glm::mat4& model
+    const glm::mat4& model,
+    bool wireframe
     )
 {
+    if (wireframe)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    // glDisable(GL_CULL_FACE);
 
     glUseProgram(shader_program);
     set_uniform(shader_program, "model", model);
@@ -69,41 +81,6 @@ static void draw_lines(
 
     glBindVertexArray(VAO);
     glDrawArrays(GL_LINES, 0, vertex_count);
-}
-
-uint32_t create_x_shader_program()
-{
-    const char* x_vertex_shader_src = R"(
-    #version 330 core
-
-    layout(location = 0) in vec3 position;
-
-    uniform mat4 model;
-    uniform mat4 view;
-    uniform mat4 projection;
-
-    void main() {
-        gl_Position = projection * view * model * vec4(position, 1.0);
-    }
-    )";
-
-    const char* x_fragment_shader_src = R"(
-    #version 330 core
-
-    out vec4 FragColor;
-
-    void main() {
-        // Hardcoded color
-        FragColor = vec4(1.0, 1.0, 1.0, 1.0); // RGB + Alpha (opacity)
-    }
-    )";
-
-    auto x_shader_program = create_shader_program(
-        x_vertex_shader_src,
-        x_fragment_shader_src
-    );
-
-    return x_shader_program;
 }
 
 
@@ -301,11 +278,14 @@ int main(int argc, char *argv[])
     vec3 player_velocity{};
     vec3 player_position{-6.0320406, 10, 580.2726};
     auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}};
+    auto player_aabb_vertices = to_vertex_xnc(player_aabb);
+    auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
+
     Move_Input move_input{};
     Trace trace{};
 
     std::vector<size_t> previous_face_indices{};
-
+    glm::mat4 aabb_transform_matrix(1.0f); // so we can render the "last" colliding hitbox so I can do some manual inspection.
     while (running)
     {
         // reset trace.
@@ -340,6 +320,9 @@ int main(int argc, char *argv[])
                     glm::vec3 vel = camera.front * noclip_move_speed;
                     player_velocity = vec3{vel.x, vel.y, vel.z}; 
 
+                    glm::vec3 position = glm::vec3(player_position.x, player_position.y, player_position.z);
+                    // transformation matrix.
+                    aabb_transform_matrix = glm::translate(glm::mat4(1.0f), position);
                 }
             }
 
@@ -391,9 +374,49 @@ int main(int argc, char *argv[])
 
                 // update player_aabb to world space.
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
+                if (!noclip)
+                {
 
+                    face_indices = bsp_collide_with_AABB(bsp, aabb, aabbs_vertices);
+                    std::print("done colliding.\n");
 
-                face_indices = bsp_collide_with_AABB(bsp, aabb, aabbs_vertices);
+                    //@Note: there are duplicates. because we do not split faces upon bsp construction.
+                    // that means we need to filter them out somewhere. I do that here. This is kind of annoying.
+                    // we should think of something better.
+                    auto filter_duplicates = [](const std::vector<size_t>& vec) {
+                        std::unordered_set<size_t> seen;
+                        std::vector<size_t> unique_elements;
+
+                        for (size_t value : vec) {
+                            if (seen.find(value) == seen.end()) {
+                                seen.insert(value); 
+                                unique_elements.push_back(value);
+                            }
+                        }
+                        return unique_elements;
+                    };
+
+                    face_indices = filter_duplicates(face_indices);
+
+                    
+                    // another additional thing. establish the min and max of the triangle.
+                    for (auto& face_idx: face_indices)
+                    {
+                        auto& v0 = aabbs_vertices[face_idx];
+                        auto& v1 = aabbs_vertices[face_idx + 1];  
+                        auto& v2 = aabbs_vertices[face_idx + 2];  
+                        vec3 normal = compute_triangle_normal(v0.position, v1.position, v2.position);
+                        auto triangle_aabb = create_aabb_from_triangle(v0.position, v1.position, v2.position);
+
+                    }
+                
+
+                }
+
+                if (noclip)
+                {
+                    face_indices = previous_face_indices;
+                }
 
                 // color the intersecting face indices white.
                 for (auto& face_idx: face_indices)
@@ -409,10 +432,6 @@ int main(int argc, char *argv[])
                     intersecting_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
                     intersecting_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
                     
-                    // intersecting_face[0].position = 1.05 * intersecting_face[0].position;
-                    // intersecting_face[1].position = 1.05 * intersecting_face[1].position;
-                    // intersecting_face[2].position = 1.05 * intersecting_face[2].position;
-
 
                     // color the triangle white.
                     glBindVertexArray(aabb_gl_buffer.VAO); 
@@ -440,7 +459,7 @@ int main(int argc, char *argv[])
                 std::vector<Plane> collider_planes{};
                 for (auto& face_idx:face_indices)
                 {
-                    collider_planes.push_back(Plane{aabbs_vertices[face_idx].position, compute_normal(aabbs_vertices[face_idx].position, aabbs_vertices[face_idx + 1].position, aabbs_vertices[face_idx + 2].position)});
+                    collider_planes.push_back(Plane{aabbs_vertices[face_idx].position, compute_triangle_normal(aabbs_vertices[face_idx].position, aabbs_vertices[face_idx + 1].position, aabbs_vertices[face_idx + 2].position)});
                 }
 
 
@@ -488,18 +507,62 @@ int main(int argc, char *argv[])
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
             // aabbs.
-            draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+            if (!noclip)
+            {
+
+                draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+                    glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                    get_look_at_view_matrix(camera),
+                    glm::mat4(1.0f),
+                    true // wireframe
+                    );
+            }
+
+            if (noclip)
+            {
+                // not only toggle noclip, also draw the aabb at the last position.
+                draw_triangles(player_aabb_gl_buffer.VAO, player_aabb_gl_buffer.VBO, player_aabb_gl_buffer.vertex_count, xnc_shader_program,
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
-                glm::mat4(1.0f)
+                aabb_transform_matrix,
+                true //wireframe
                 );
+            }
+
+            if (noclip)
+            {
+
+                auto construct_faces = [](const std::vector<vertex_xnc>& aabbs_vertices, const std::vector<size_t>& face_indices) {
+                    std::vector<vertex_xnc> faces;
+                    for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
+                    {
+                        
+                            faces.push_back(aabbs_vertices[face_indices[face_idx]]);   
+                            faces.push_back(aabbs_vertices[face_indices[face_idx] + 1]);
+                            faces.push_back(aabbs_vertices[face_indices[face_idx] + 2]);
+                    }
+
+                    return faces; // Return the constructed vector of faces
+                };
+
+                auto faces = construct_faces(aabbs_vertices, previous_face_indices);
+                if (faces.size() > 0)
+                {
+                    debug_draw_triangles(
+                        faces, 
+                    glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                    get_look_at_view_matrix(camera),
+                    glm::mat4(1.0f));
+
+                }
+            }
 
             // uv grid
-            draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
-                glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-                get_look_at_view_matrix(camera),
-                glm::mat4(1.0f)
-                );
+            // draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
+            //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+            //     get_look_at_view_matrix(camera),
+            //     glm::mat4(1.0f)
+            //     );
 
             // player bounding box.
             // vec3 target_position = player_position + (20.f * vec3{camera.front.x, camera.front.y, camera.front.z});
