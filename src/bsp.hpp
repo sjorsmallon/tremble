@@ -387,8 +387,12 @@ bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, co
 }
 
 
-inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
-    
+//FIXME:  provide world_up instead of hardcoding.
+// return ground_faces, colliding_faces )
+inline std::tuple<std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
+
+    vec3 world_up{0.0f, 1.0f, 0.0f};
+    std::vector<size_t> ground_faces;
     std::vector<size_t> colliding_faces;
 
     // Recursive lambda for traversing the BSP tree
@@ -425,26 +429,27 @@ inline std::vector<size_t> bsp_collide_with_AABB(BSP* bsp, const AABB& aabb, con
                     aabb,
                     v0, v1 , v2);
                 
-                std::print("normal: {}\n", normal);
-                if (normal.x > 0.1f || normal.x < -0.1f) std::print("max_penetration_depth: {}\n", max_penetration_depth);
+                if (max_penetration_depth > 2.f)
+                {
+                    if ((dot(normal, world_up) > 0.707f) ) // we are dealing with a non-floor
+                    {
+                         ground_faces.push_back(node->face_idx);
+                    }
+                    else
+                    {
+                        colliding_faces.push_back(node->face_idx);
+                    }
+                }
+
                 
-                // we will filter out other things later. where this is called.
-                // if (max_penetration_depth > 2.f)
-                 colliding_faces.push_back(node->face_idx);
             }
         }
     };
 
     traverse(bsp);
 
-    return colliding_faces;
+    return {ground_faces, colliding_faces};
 }
-
-
-
-
-
-
 
 
 

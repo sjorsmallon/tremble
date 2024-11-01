@@ -377,7 +377,16 @@ int main(int argc, char *argv[])
                 if (!noclip)
                 {
 
-                    face_indices = bsp_collide_with_AABB(bsp, aabb, aabbs_vertices);
+                    auto [ground_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
+
+                    //@Note: this is where we should continue.
+                    // FIXME: this is just a temporary measure.
+                    face_indices.reserve(ground_face_indices.size() + non_ground_face_indices.size());
+                    face_indices.insert(face_indices.end(), ground_face_indices.begin(), ground_face_indices.end());
+                    face_indices.insert(face_indices.end(), non_ground_face_indices.begin(), non_ground_face_indices.end());
+
+
+
                     std::print("done colliding.\n");
 
                     //@Note: there are duplicates. because we do not split faces upon bsp construction.
@@ -407,7 +416,6 @@ int main(int argc, char *argv[])
                         auto& v2 = aabbs_vertices[face_idx + 2];  
                         vec3 normal = compute_triangle_normal(v0.position, v1.position, v2.position);
                         auto triangle_aabb = create_aabb_from_triangle(v0.position, v1.position, v2.position);
-
                     }
                 
 
