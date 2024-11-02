@@ -280,7 +280,7 @@ inline std::vector<vertex_xnc> to_vertex_xnc(std::vector<AABB>& aabbs)
 
 
 
-AABB create_aabb_from_triangle(const vec3& v0, const vec3& v1, const vec3& v2) {
+AABB aabb_from_triangle(const vec3& v0, const vec3& v1, const vec3& v2) {
     // Initialize min and max points with the coordinates of the first vertex
     vec3 min_point = v0;
     vec3 max_point = v0;

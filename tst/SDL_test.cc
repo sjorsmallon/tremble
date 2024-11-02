@@ -374,20 +374,11 @@ int main(int argc, char *argv[])
 
                 // update player_aabb to world space.
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
+                auto [ground_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
+
                 if (!noclip)
                 {
 
-                    auto [ground_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
-
-                    //@Note: this is where we should continue.
-                    // FIXME: this is just a temporary measure.
-                    face_indices.reserve(ground_face_indices.size() + non_ground_face_indices.size());
-                    face_indices.insert(face_indices.end(), ground_face_indices.begin(), ground_face_indices.end());
-                    face_indices.insert(face_indices.end(), non_ground_face_indices.begin(), non_ground_face_indices.end());
-
-
-
-                    std::print("done colliding.\n");
 
                     //@Note: there are duplicates. because we do not split faces upon bsp construction.
                     // that means we need to filter them out somewhere. I do that here. This is kind of annoying.
@@ -405,20 +396,13 @@ int main(int argc, char *argv[])
                         return unique_elements;
                     };
 
-                    face_indices = filter_duplicates(face_indices);
+                    ground_face_indices = filter_duplicates(ground_face_indices);
+                    non_ground_face_indices = filter_duplicates(non_ground_face_indices);
 
-                    
-                    // another additional thing. establish the min and max of the triangle.
-                    for (auto& face_idx: face_indices)
-                    {
-                        auto& v0 = aabbs_vertices[face_idx];
-                        auto& v1 = aabbs_vertices[face_idx + 1];  
-                        auto& v2 = aabbs_vertices[face_idx + 2];  
-                        vec3 normal = compute_triangle_normal(v0.position, v1.position, v2.position);
-                        auto triangle_aabb = create_aabb_from_triangle(v0.position, v1.position, v2.position);
-                    }
-                
-
+                    // temporary. this logic needs to be cleaned up.
+                    face_indices.reserve(ground_face_indices.size() + non_ground_face_indices.size());
+                    face_indices.insert(face_indices.end(), ground_face_indices.begin(), ground_face_indices.end());
+                    face_indices.insert(face_indices.end(), non_ground_face_indices.begin(), non_ground_face_indices.end());
                 }
 
                 if (noclip)
@@ -515,16 +499,14 @@ int main(int argc, char *argv[])
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
             // aabbs.
-            if (!noclip)
-            {
 
-                draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
-                    glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-                    get_look_at_view_matrix(camera),
-                    glm::mat4(1.0f),
-                    true // wireframe
-                    );
-            }
+
+            draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
+                glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                get_look_at_view_matrix(camera),
+                glm::mat4(1.0f),
+                false // wireframe
+                );
 
             if (noclip)
             {
@@ -533,7 +515,7 @@ int main(int argc, char *argv[])
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
                 aabb_transform_matrix,
-                true //wireframe
+                false //wireframe
                 );
             }
 
@@ -544,10 +526,13 @@ int main(int argc, char *argv[])
                     std::vector<vertex_xnc> faces;
                     for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
                     {
-                        
-                            faces.push_back(aabbs_vertices[face_indices[face_idx]]);   
-                            faces.push_back(aabbs_vertices[face_indices[face_idx] + 1]);
-                            faces.push_back(aabbs_vertices[face_indices[face_idx] + 2]);
+                            auto& v0 = aabbs_vertices[face_indices[face_idx]];
+                            auto& v1 = aabbs_vertices[face_indices[face_idx] + 1];
+                            auto& v2 = aabbs_vertices[face_indices[face_idx] + 2];
+                            faces.push_back(v0);   
+                            faces.push_back(v1);
+                            faces.push_back(v2);
+                            auto normal = compute_triangle_normal(v0.position, v1.position, v2.position);
                     }
 
                     return faces; // Return the constructed vector of faces

@@ -220,20 +220,6 @@ inline bool check_jump(const Move_Input& input)
 }
 
 
-// new clip vector
-// inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce) {
-//     // Calculate the component of `in` along `normal`
-//     float backoff = dot(in, normal) * overbounce;
-
-//     // Generate the "change" vector along the normal
-//     vec3 change = normal * backoff;
-
-//     // Subtract the "change" component from `in` to get the clipped vector
-//     vec3 result = in - change;
-
-//     return result;
-// }
-
 // old clip vector
 inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 {
@@ -388,9 +374,7 @@ std::tuple<vec3, vec3> my_walk_move(
     // readjust the velocity for all the collider planes.
     for (auto& collider_plane: collider_planes)
     {
-        //@FIXME: I don't understand if this will fix it, but i want to try anyway.
         // we should not collide with the plane if we are trying to move away from it.
-        
         new_speed = length(new_velocity);
         new_velocity = normalize(new_velocity);
         if (dot(new_velocity, collider_plane.normal) > 0)
@@ -449,6 +433,7 @@ std::tuple<vec3, vec3> my_walk_move(
 std::tuple<vec3, vec3> my_air_move(
     Move_Input& input,
     AABB_Traces& traces,
+    const std::vector<Plane>& collider_planes,
     const vec3& old_position,
     const vec3& old_velocity,
     const vec3& front,
@@ -460,6 +445,7 @@ std::tuple<vec3, vec3> my_air_move(
     constexpr auto pm_overbounce = 1.001f;
     constexpr auto pm_maxspeed = 320.f; 
     constexpr auto pm_air_acceleration = 5.0f;
+    constexpr auto world_down = vec3{0.f, -1.f, 0.f};
 
 
     vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
@@ -491,9 +477,6 @@ std::tuple<vec3, vec3> my_air_move(
         front_clipped = clip_vector(front_without_y, traces.ground_trace.face_normal, pm_overbounce);
         right_clipped = clip_vector(right_without_y, traces.ground_trace.face_normal, pm_overbounce);
     }
-
-
-
 
     bool received_input = (input.forward_pressed  ||
                            input.backward_pressed ||
@@ -534,12 +517,38 @@ std::tuple<vec3, vec3> my_air_move(
     new_velocity = normalize(new_velocity);
     new_velocity = new_speed * new_velocity;
 
+    float new_y_velocity = old_velocity.y;
 
+    // clip if necessary
+    for (auto& collider_plane: collider_planes)
+    {
+        //@FIXME: I don't understand if this will fix it, but i want to try anyway.
+        // we should not collide with the plane if we are trying to move away from it.
+        
+        new_speed = length(new_velocity);
+        new_velocity = normalize(new_velocity);
 
+        auto cos_angle = dot(new_velocity, collider_plane.normal); 
+        if (cos_angle > 0.f) // are we moving away? just keep your velocity.
+        {
+            new_velocity = new_velocity * new_speed;
+            continue;
+        }
+
+        // 45 degree angle and all that.
+        if (dot(collider_plane.normal, world_down) > 0.707f)
+        {
+            new_y_velocity = 0.f;
+        }
+
+        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
+        new_velocity = new_velocity * new_speed;
+    }
 
     // apply gravity.
-    new_velocity.y = old_velocity.y;
+    new_velocity.y = new_y_velocity;
     new_velocity.y -= g_gravity * dt;
+
 
     return step_air_move(old_position, new_velocity, dt);
 }
@@ -571,6 +580,7 @@ std::tuple<vec3, vec3> player_move(
         }
         ++plane_idx;
     }
+
     // remove the ground plane from the collider planes.
     if (traces.ground_trace.collided) collider_planes.erase(collider_planes.begin() + plane_idx);
 
@@ -589,7 +599,7 @@ std::tuple<vec3, vec3> player_move(
     }
     else
     {
-        return my_air_move(input, traces, old_position, old_velocity, front, right, dt);
+        return my_air_move(input, traces, collider_planes, old_position, old_velocity, front, right, dt);
     }
 
 }

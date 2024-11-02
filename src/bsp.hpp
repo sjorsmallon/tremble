@@ -330,7 +330,8 @@ void project_aabb_on_axis(const AABB& aabb, const vec3& axis, float& min, float&
     }
 }
 
-bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, const AABB& aabb) {
+bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, const AABB& aabb)
+{
 
     std::array<vec3, 3> aabb_axes{
         vec3{1.f, 0, 0},
@@ -431,13 +432,25 @@ inline std::tuple<std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* 
                 
                 if (max_penetration_depth > 2.f)
                 {
-                    if ((dot(normal, world_up) > 0.707f) ) // we are dealing with a non-floor
+                    auto triangle_aabb = aabb_from_triangle(v0, v1, v2);
+                    auto overlap = vec3{.x = fabs(aabb.min.x - triangle_aabb.max.x ),.y = fabs(aabb.min.y - triangle_aabb.max.y), .z = fabs(aabb.min.z - triangle_aabb.max.z)};
+                    auto cos_angle = dot(normal, world_up);
+                    if ( (cos_angle > 0.707f) ) // we are dealing with a floor
                     {
-                         ground_faces.push_back(node->face_idx);
+                        // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                        if (triangle_aabb.max.y - aabb.min.y < 5.f)
+                        {
+                            ground_faces.push_back(node->face_idx);
+                        }
                     }
                     else
                     {
-                        colliding_faces.push_back(node->face_idx);
+                        // what is the height overlap?
+                        //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
+                        if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
+                        {
+                            colliding_faces.push_back(node->face_idx);
+                        }
                     }
                 }
 
