@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
         {
             SDL_CaptureMouse(true);
             SDL_HideCursor();
-            SDL_WarpMouseInWindow(window, 0.f, 0.f); // xy 
+            SDL_WarpMouseInWindow(window, 0.5f * window_width, 0.5f * window_height); // xy 
         }
 
         // Create an OpenGL context associated with the window.
