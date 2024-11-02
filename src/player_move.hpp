@@ -535,10 +535,13 @@ std::tuple<vec3, vec3> my_air_move(
             continue;
         }
 
-        // 45 degree angle and all that.
-        if (dot(collider_plane.normal, world_down) > 0.707f)
+        // hitting the ceiling.
+        auto cos_angle_plane_world_down = dot(collider_plane.normal, world_down); 
+        if (cos_angle_plane_world_down> 0.707f)
         {
-            new_y_velocity = 0.f;
+            // if we were alreading moving down, it does not matter.
+            new_y_velocity = (new_y_velocity < 0.f ? new_y_velocity: 0.f);
+            // new_y_velocity = 0.f;
         }
 
         new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
@@ -569,20 +572,35 @@ std::tuple<vec3, vec3> player_move(
     // let's just take 45 degrees for now.
     // just pick the first ground plane?
     auto plane_idx = 0;
+    bool ground_trace_found = false;
+    bool ceiling_trace_found = false;
+    auto ground_plane_idx = 0;
+    auto ceiling_plane_idx = 0;
     for (auto& collider_plane: collider_planes)
     {
         auto angle = dot(vec3{0.0f, 1.0f, 0.0f}, collider_plane.normal);
-        if ( angle >= 0.707f)
+        if ( angle >= 0.707f && !ground_trace_found)
         {
             traces.ground_trace.collided = true;
             traces.ground_trace.face_normal = collider_plane.normal;
-            break;
+            ground_trace_found = true;
+            ground_plane_idx = plane_idx;
+        }
+        if (angle <= -0.707f && !ceiling_trace_found)
+        {
+            traces.ceiling_trace.collided = true;
+            traces.ground_trace.face_normal = collider_plane.normal;
+            ceiling_trace_found = true;
+            ceiling_plane_idx = plane_idx;
         }
         ++plane_idx;
     }
 
     // remove the ground plane from the collider planes.
-    if (traces.ground_trace.collided) collider_planes.erase(collider_planes.begin() + plane_idx);
+    if (traces.ground_trace.collided)
+    {
+            collider_planes.erase(collider_planes.begin() + ground_plane_idx);
+    }
 
     auto& ground_trace = traces.ground_trace;
     // we are grounded if (and only if):
@@ -592,6 +610,7 @@ std::tuple<vec3, vec3> player_move(
 
     if (grounded)
     {
+        std::print("ground move\n");
         //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move asumes that we are grounded.
         // I do not really like that.
         vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
@@ -599,8 +618,8 @@ std::tuple<vec3, vec3> player_move(
     }
     else
     {
+        std::print("air move\n");
         return my_air_move(input, traces, collider_planes, old_position, old_velocity, front, right, dt);
     }
 
 }
-

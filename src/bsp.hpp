@@ -389,11 +389,12 @@ bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, co
 
 
 //FIXME:  provide world_up instead of hardcoding.
-// return ground_faces, colliding_faces )
-inline std::tuple<std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
+// return ground_faces, ceiling_faces, colliding_faces)
+inline std::tuple<std::vector<size_t>, std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
 
     vec3 world_up{0.0f, 1.0f, 0.0f};
     std::vector<size_t> ground_faces;
+    std::vector<size_t> ceiling_faces;
     std::vector<size_t> colliding_faces;
 
     // Recursive lambda for traversing the BSP tree
@@ -440,15 +441,27 @@ inline std::tuple<std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* 
                         // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
                         if (triangle_aabb.max.y - aabb.min.y < 5.f)
                         {
+                            std::print("ground overlap: {}\n", overlap);
                             ground_faces.push_back(node->face_idx);
                         }
                     }
+                    else if ( (cos_angle < -.707f))
+                    {
+                        // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                        if (fabs(triangle_aabb.max.y - aabb.max.y)  < 5.f)
+                        {
+                            std::print("ceiling overlap: {}\n", overlap);
+                            ceiling_faces.push_back(node->face_idx);
+                        }
+                    }
+
                     else
                     {
                         // what is the height overlap?
                         //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
                         if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
                         {
+                            std::print("wall overlap: {}\n", overlap);
                             colliding_faces.push_back(node->face_idx);
                         }
                     }
@@ -461,7 +474,7 @@ inline std::tuple<std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* 
 
     traverse(bsp);
 
-    return {ground_faces, colliding_faces};
+    return {ground_faces, ceiling_faces, colliding_faces};
 }
 
 

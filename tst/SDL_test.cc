@@ -52,7 +52,7 @@ static void draw_triangles(
     {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
-    // glDisable(GL_CULL_FACE);
+    glDisable(GL_CULL_FACE);
 
     glUseProgram(shader_program);
     set_uniform(shader_program, "model", model);
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
 
                 // update player_aabb to world space.
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
-                auto [ground_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
+                auto [ground_face_indices, ceiling_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
 
                 if (!noclip)
                 {
@@ -397,11 +397,13 @@ int main(int argc, char *argv[])
                     };
 
                     ground_face_indices = filter_duplicates(ground_face_indices);
+                    ceiling_face_indices = filter_duplicates(ceiling_face_indices);
                     non_ground_face_indices = filter_duplicates(non_ground_face_indices);
 
                     // temporary. this logic needs to be cleaned up.
-                    face_indices.reserve(ground_face_indices.size() + non_ground_face_indices.size());
+                    face_indices.reserve(ground_face_indices.size() + ceiling_face_indices.size() +  non_ground_face_indices.size());
                     face_indices.insert(face_indices.end(), ground_face_indices.begin(), ground_face_indices.end());
+                    face_indices.insert(face_indices.end(), ceiling_face_indices.begin(), ceiling_face_indices.end());
                     face_indices.insert(face_indices.end(), non_ground_face_indices.begin(), non_ground_face_indices.end());
                 }
 
@@ -449,7 +451,7 @@ int main(int argc, char *argv[])
 
                 // plane is combination of v0 and the calculated normal.
                 std::vector<Plane> collider_planes{};
-                for (auto& face_idx:face_indices)
+                for (auto& face_idx: face_indices)
                 {
                     collider_planes.push_back(Plane{aabbs_vertices[face_idx].position, compute_triangle_normal(aabbs_vertices[face_idx].position, aabbs_vertices[face_idx + 1].position, aabbs_vertices[face_idx + 2].position)});
                 }
@@ -505,7 +507,7 @@ int main(int argc, char *argv[])
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
                 glm::mat4(1.0f),
-                false // wireframe
+                true // wireframe
                 );
 
             if (noclip)
@@ -515,7 +517,7 @@ int main(int argc, char *argv[])
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
                 aabb_transform_matrix,
-                false //wireframe
+                true //wireframe
                 );
             }
 
