@@ -239,8 +239,8 @@ int main()
 				// send input to the server.
 				std::vector<Packet> packets = convert_to_packets(move_input, MESSAGE_PLAYER_INPUT);
 				assert(packets.size() == 1);	
-				std::vector<Plane> collider_planes{};
 				AABB_Traces traces{};
+				auto collider_planes = Collider_Planes{};
 				// simulate
 				auto [new_player_position, new_player_velocity] = my_walk_move(
 					move_input,

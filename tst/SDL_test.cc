@@ -273,6 +273,7 @@ int main(int argc, char *argv[])
     float mouse_y{};
     float last_mouse_x{};
     float last_mouse_y{};
+    vec3 world_up = vec3{0.f, 1.f, 0.f};
 
     // entity related
     vec3 player_velocity{};
@@ -349,8 +350,10 @@ int main(int argc, char *argv[])
 
             // collision detection.
             std::vector<size_t> face_indices;
+            auto ground_face_indices  = std::vector<size_t>{};
+            auto ceiling_face_indices = std::vector<size_t>{};
+            auto wall_face_indices    = std::vector<size_t>{};
             {
-
                 // restore color to the previous face_indices
                 for (auto& face_idx: previous_face_indices)
                 {
@@ -372,39 +375,78 @@ int main(int argc, char *argv[])
                 }
 
 
-                // update player_aabb to world space.
+                // update player_aabb to world space (to visualize any collisions.)
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
-                auto [ground_face_indices, ceiling_face_indices, non_ground_face_indices] = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
+                auto all_face_indices = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
 
-                if (!noclip)
+                //@Note: there are duplicates. because we do not split faces upon bsp construction.
+                // that means we need to filter them out somewhere. I do that here. This is kind of annoying.
+                // we should think of something better.
+                auto filter_duplicates = [](const std::vector<size_t>& vec)
                 {
+                    std::unordered_set<size_t> seen;
+                    std::vector<size_t> unique_elements;
 
+                    for (size_t value : vec) {
+                        if (seen.find(value) == seen.end()) {
+                            seen.insert(value); 
+                            unique_elements.push_back(value);
+                        }
+                    }
+                    return unique_elements;
+                };
 
-                    //@Note: there are duplicates. because we do not split faces upon bsp construction.
-                    // that means we need to filter them out somewhere. I do that here. This is kind of annoying.
-                    // we should think of something better.
-                    auto filter_duplicates = [](const std::vector<size_t>& vec) {
-                        std::unordered_set<size_t> seen;
-                        std::vector<size_t> unique_elements;
+                all_face_indices = filter_duplicates(all_face_indices);
+  
+                for (auto& face_idx: all_face_indices)
+                {   
+                    auto &v0 = aabbs_vertices[face_idx].position;
+                    auto &v1 = aabbs_vertices[face_idx + 1].position;
+                    auto &v2 = aabbs_vertices[face_idx + 2].position;
 
-                        for (size_t value : vec) {
-                            if (seen.find(value) == seen.end()) {
-                                seen.insert(value); 
-                                unique_elements.push_back(value);
+                    auto normal = compute_triangle_normal(v0, v1, v2);
+
+                    float max_penetration_depth = calculate_max_penetration_depth(
+                        aabb,
+                        v0, v1 , v2);
+    
+                    // FIXME(Sjors): formalize this value. I "found" it by walking across multiple aabb and getting the lowest one,
+                    // which I think is the side of the adjacent aabb.
+                    // are we intersecting by a large enough "penetration depth"?
+                    if (max_penetration_depth > 2.f)
+                    {
+                        auto triangle_aabb = aabb_from_triangle(v0, v1, v2);
+                        auto overlap = vec3{.x = fabs(aabb.min.x - triangle_aabb.max.x ),.y = fabs(aabb.min.y - triangle_aabb.max.y), .z = fabs(aabb.min.z - triangle_aabb.max.z)};
+                        auto cos_angle = dot(normal, world_up);
+                        if ( (cos_angle > 0.707f) ) //  floor (45 degree angle)
+                        {
+                            // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                            if (triangle_aabb.max.y - aabb.min.y < 5.f)
+                            {
+                                std::print("ground overlap: {}\n", overlap);
+                                ground_face_indices.push_back(face_idx);
                             }
                         }
-                        return unique_elements;
-                    };
-
-                    ground_face_indices = filter_duplicates(ground_face_indices);
-                    ceiling_face_indices = filter_duplicates(ceiling_face_indices);
-                    non_ground_face_indices = filter_duplicates(non_ground_face_indices);
-
-                    // temporary. this logic needs to be cleaned up.
-                    face_indices.reserve(ground_face_indices.size() + ceiling_face_indices.size() +  non_ground_face_indices.size());
-                    face_indices.insert(face_indices.end(), ground_face_indices.begin(), ground_face_indices.end());
-                    face_indices.insert(face_indices.end(), ceiling_face_indices.begin(), ceiling_face_indices.end());
-                    face_indices.insert(face_indices.end(), non_ground_face_indices.begin(), non_ground_face_indices.end());
+                        else if ( (cos_angle < -.707f)) // ceiling (45 degree angle)
+                        {
+                            // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                            if (fabs(triangle_aabb.max.y - aabb.max.y)  < 5.f)
+                            {
+                                std::print("ceiling overlap: {}\n", overlap);
+                                ceiling_face_indices.push_back(face_idx);
+                            }
+                        }
+                        else
+                        {
+                            // what is the height overlap?
+                            //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
+                            if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
+                            {
+                                std::print("wall overlap: {}\n", overlap);
+                                wall_face_indices.push_back(face_idx);
+                            }
+                        }
+                    }
                 }
 
                 if (noclip)
@@ -446,15 +488,23 @@ int main(int argc, char *argv[])
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
 
-                // using traces is misguided. but it is nice to know what the ground trace is / if we have a ground trace. I guess. I will just pass in the set of planes. construct them here.
-                // auto traces = AABB_Traces{};
-
                 // plane is combination of v0 and the calculated normal.
-                std::vector<Plane> collider_planes{};
-                for (auto& face_idx: face_indices)
+                auto create_planes_from_face_indices = [](std::vector<size_t>& face_indices, std::vector<vertex_xnc>& vertices) -> std::vector<Plane>
                 {
-                    collider_planes.push_back(Plane{aabbs_vertices[face_idx].position, compute_triangle_normal(aabbs_vertices[face_idx].position, aabbs_vertices[face_idx + 1].position, aabbs_vertices[face_idx + 2].position)});
-                }
+                    auto planes = std::vector<Plane>{};
+                    for (auto& face_idx: face_indices)
+                    {
+                        planes.push_back(Plane{vertices[face_idx].position, compute_triangle_normal(vertices[face_idx].position, vertices[face_idx + 1].position, vertices[face_idx + 2].position)});
+                    }
+
+                    return planes;
+                };
+
+                auto ground_planes  = create_planes_from_face_indices(ground_face_indices, aabbs_vertices);
+                auto ceiling_planes = create_planes_from_face_indices(ceiling_face_indices, aabbs_vertices);
+                auto wall_planes    = create_planes_from_face_indices(wall_face_indices, aabbs_vertices);
+
+                auto collider_planes = Collider_Planes{.ground_planes = std::move(ground_planes), .ceiling_planes = std::move(ceiling_planes), .wall_planes = std::move(wall_planes)};
 
 
                 auto [new_position, new_velocity] = player_move(
@@ -534,7 +584,6 @@ int main(int argc, char *argv[])
                             faces.push_back(v0);   
                             faces.push_back(v1);
                             faces.push_back(v2);
-                            auto normal = compute_triangle_normal(v0.position, v1.position, v2.position);
                     }
 
                     return faces; // Return the constructed vector of faces

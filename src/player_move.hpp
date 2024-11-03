@@ -21,6 +21,14 @@ struct AABB_Traces
     Trace neg_z_trace;
 };
 
+// do we need to discriminate further?
+struct Collider_Planes
+{
+    std::vector<Plane> ground_planes;
+    std::vector<Plane> ceiling_planes;
+    std::vector<Plane> wall_planes;
+};
+
 
 //@Note: this move input is serialized and sent across the wire. I don't think that this is the correct place to define it.
 // but I will leave it here for now.
@@ -250,7 +258,7 @@ inline vec3 clip_vector(vec3 in, vec3 normal, const float overbounce)
 std::tuple<vec3, vec3> my_walk_move(
 	Move_Input& input,
     const AABB_Traces& traces,
-    const std::vector<Plane>& collider_planes,
+    const Collider_Planes& collider_planes,
     const vec3 old_position,
     const vec3 old_velocity,
     const vec3 front,
@@ -371,8 +379,8 @@ std::tuple<vec3, vec3> my_walk_move(
     new_velocity = normalize(new_velocity);
     new_velocity = new_speed * new_velocity;
 
-    // readjust the velocity for all the collider planes.
-    for (auto& collider_plane: collider_planes)
+    // readjust the velocity for all the wall collider planes.
+    for (auto& collider_plane: collider_planes.wall_planes)
     {
         // we should not collide with the plane if we are trying to move away from it.
         new_speed = length(new_velocity);
@@ -433,7 +441,7 @@ std::tuple<vec3, vec3> my_walk_move(
 std::tuple<vec3, vec3> my_air_move(
     Move_Input& input,
     AABB_Traces& traces,
-    const std::vector<Plane>& collider_planes,
+    Collider_Planes& collider_planes,
     const vec3& old_position,
     const vec3& old_velocity,
     const vec3& front,
@@ -520,7 +528,7 @@ std::tuple<vec3, vec3> my_air_move(
     float new_y_velocity = old_velocity.y;
 
     // clip if necessary
-    for (auto& collider_plane: collider_planes)
+    for (auto& collider_plane: collider_planes.wall_planes)
     {
         //@FIXME: I don't understand if this will fix it, but i want to try anyway.
         // we should not collide with the plane if we are trying to move away from it.
@@ -535,18 +543,21 @@ std::tuple<vec3, vec3> my_air_move(
             continue;
         }
 
-        // hitting the ceiling.
-        auto cos_angle_plane_world_down = dot(collider_plane.normal, world_down); 
+        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
+        new_velocity = new_velocity * new_speed;
+    }
+
+    // clip against the ceiling.
+    if (traces.ceiling_trace.collided)
+    {
+        auto cos_angle_plane_world_down = dot(traces.ceiling_trace.face_normal, world_down); 
         if (cos_angle_plane_world_down> 0.707f)
         {
             // if we were alreading moving down, it does not matter.
             new_y_velocity = (new_y_velocity < 0.f ? new_y_velocity: 0.f);
-            // new_y_velocity = 0.f;
         }
-
-        new_velocity = clip_vector(new_velocity, collider_plane.normal, pm_overbounce);
-        new_velocity = new_velocity * new_speed;
-    }
+    } 
+       
 
     // apply gravity.
     new_velocity.y = new_y_velocity;
@@ -559,7 +570,7 @@ std::tuple<vec3, vec3> my_air_move(
 // new_player_position, new_player_velocity
 std::tuple<vec3, vec3> player_move(
     Move_Input& input,
-    std::vector<Plane>& collider_planes, // self-evident, I guess.@FIXME: this is not const because we remove an element later for the ground plane. yikes.
+    Collider_Planes& collider_planes, //self-evident, I guess.@FIXME: this is not const because we remove an element later for the ground plane. yikes.
     const vec3& old_position,
     const vec3& old_velocity,
     const vec3& front,
@@ -568,57 +579,39 @@ std::tuple<vec3, vec3> player_move(
 {
     auto traces = AABB_Traces{};
 
-    // what is the ground plane? do we have a ground plane? is there only one? 
-    // let's just take 45 degrees for now.
-    // just pick the first ground plane?
-    auto plane_idx = 0;
-    bool ground_trace_found = false;
-    bool ceiling_trace_found = false;
-    auto ground_plane_idx = 0;
-    auto ceiling_plane_idx = 0;
-    for (auto& collider_plane: collider_planes)
+    //@FIXME: just pick the first ground plane? how do we even deal with this?
+    if (collider_planes.ground_planes.size() > 1) std::print("[WARNING] more than one ground plane found. picking the first one.\n");
+
+    if (!collider_planes.ground_planes.empty())
     {
-        auto angle = dot(vec3{0.0f, 1.0f, 0.0f}, collider_plane.normal);
-        if ( angle >= 0.707f && !ground_trace_found)
-        {
-            traces.ground_trace.collided = true;
-            traces.ground_trace.face_normal = collider_plane.normal;
-            ground_trace_found = true;
-            ground_plane_idx = plane_idx;
-        }
-        if (angle <= -0.707f && !ceiling_trace_found)
-        {
-            traces.ceiling_trace.collided = true;
-            traces.ground_trace.face_normal = collider_plane.normal;
-            ceiling_trace_found = true;
-            ceiling_plane_idx = plane_idx;
-        }
-        ++plane_idx;
+        // pick the first ground plane.
+        traces.ground_trace.collided = true;
+        traces.ground_trace.face_normal = collider_planes.ground_planes[0].normal;
     }
 
-    // remove the ground plane from the collider planes.
-    if (traces.ground_trace.collided)
+    if (collider_planes.ceiling_planes.size() > 1) std::print("[WARNING] more than one ceiling plane found. picking the first one.\n");
+
+    if (!collider_planes.ceiling_planes.empty())
     {
-            collider_planes.erase(collider_planes.begin() + ground_plane_idx);
+        traces.ceiling_trace.collided = true;
+        traces.ceiling_trace.face_normal = collider_planes.ceiling_planes[0].normal;
     }
 
     auto& ground_trace = traces.ground_trace;
     // we are grounded if (and only if):
     // - the ground trace hits.
-    // - y velocity is going down.
+    // - y velocity is going down. (at least not going up.)
     bool grounded = ((ground_trace.collided) && (old_velocity.y <= 0.0f));
 
     if (grounded)
     {
-        std::print("ground move\n");
-        //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move asumes that we are grounded.
+        //@FIXME: currently, we set the y_velocity to 0 here already. because my_walk_move assumes that we are grounded.
         // I do not really like that.
         vec3 old_velocity_without_y = vec3{old_velocity.x, 0.f, old_velocity.z};
         return my_walk_move(input, traces, collider_planes, old_position, old_velocity_without_y, front, right, dt);
     }
     else
     {
-        std::print("air move\n");
         return my_air_move(input, traces, collider_planes, old_position, old_velocity, front, right, dt);
     }
 

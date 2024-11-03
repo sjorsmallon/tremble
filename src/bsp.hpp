@@ -257,18 +257,18 @@ BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all
 
 
 
-float calculate_penetration_depth(const vec3& point, const vec3& plane_normal, const vec3& point_on_plane)
+inline float calculate_penetration_depth(const vec3& point, const vec3& plane_normal, const vec3& point_on_plane)
 {
     // Calculate signed distance
     return dot(point - point_on_plane, plane_normal);
 }
 
-float calculate_penetration_depth_triangle(const vec3& aabb_center, const vec3& triangle_normal, const vec3& triangle_point)
+inline float calculate_penetration_depth_triangle(const vec3& aabb_center, const vec3& triangle_normal, const vec3& triangle_point)
 {
     return dot(aabb_center - triangle_point, triangle_normal);
 }
 
-float calculate_max_penetration_depth(const AABB& aabb, 
+inline float calculate_max_penetration_depth(const AABB& aabb, 
                                        const vec3& triangle_vertex0, const vec3& triangle_vertex1, const vec3& triangle_vertex2) {
     std::vector<vec3> aabb_vertices = {
         vec3{aabb.min.x, aabb.min.y, aabb.min.z}, // min corner
@@ -390,11 +390,8 @@ bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, co
 
 //FIXME:  provide world_up instead of hardcoding.
 // return ground_faces, ceiling_faces, colliding_faces)
-inline std::tuple<std::vector<size_t>, std::vector<size_t>, std::vector<size_t>> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
+inline std::vector<size_t> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
 
-    vec3 world_up{0.0f, 1.0f, 0.0f};
-    std::vector<size_t> ground_faces;
-    std::vector<size_t> ceiling_faces;
     std::vector<size_t> colliding_faces;
 
     // Recursive lambda for traversing the BSP tree
@@ -424,57 +421,14 @@ inline std::tuple<std::vector<size_t>, std::vector<size_t>, std::vector<size_t>>
             // we are straddling the plane, but are we actually colliding?
             if (triangle_intersects_aabb(v0, v1, v2, aabb))
             {
-                // FIXME(Sjors): formalize this value. I "found" it by walking across multiple aabb and getting the lowest one,
-                // which I think is the side of the adjacent aabb.
-                // are we intersecting by a large enough "penetration depth"?
-                float max_penetration_depth = calculate_max_penetration_depth(
-                    aabb,
-                    v0, v1 , v2);
-                
-                if (max_penetration_depth > 2.f)
-                {
-                    auto triangle_aabb = aabb_from_triangle(v0, v1, v2);
-                    auto overlap = vec3{.x = fabs(aabb.min.x - triangle_aabb.max.x ),.y = fabs(aabb.min.y - triangle_aabb.max.y), .z = fabs(aabb.min.z - triangle_aabb.max.z)};
-                    auto cos_angle = dot(normal, world_up);
-                    if ( (cos_angle > 0.707f) ) // we are dealing with a floor
-                    {
-                        // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
-                        if (triangle_aabb.max.y - aabb.min.y < 5.f)
-                        {
-                            std::print("ground overlap: {}\n", overlap);
-                            ground_faces.push_back(node->face_idx);
-                        }
-                    }
-                    else if ( (cos_angle < -.707f))
-                    {
-                        // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
-                        if (fabs(triangle_aabb.max.y - aabb.max.y)  < 5.f)
-                        {
-                            std::print("ceiling overlap: {}\n", overlap);
-                            ceiling_faces.push_back(node->face_idx);
-                        }
-                    }
-
-                    else
-                    {
-                        // what is the height overlap?
-                        //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
-                        if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
-                        {
-                            std::print("wall overlap: {}\n", overlap);
-                            colliding_faces.push_back(node->face_idx);
-                        }
-                    }
-                }
-
-                
+                colliding_faces.push_back(node->face_idx);
             }
         }
     };
 
     traverse(bsp);
 
-    return {ground_faces, ceiling_faces, colliding_faces};
+    return colliding_faces;
 }
 
 
