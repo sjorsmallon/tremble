@@ -48,10 +48,10 @@ executable('sdl_test',
   install : false
 )
 
-
 # Build server_test
 executable('server_test',
   'tst/server_test.cc',
   include_directories : inc_dir,
   install : false
 )
+
