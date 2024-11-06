@@ -55,3 +55,9 @@ executable('server_test',
   install : false
 )
 
+# Build server_test
+executable('font_test',
+  'tst/font_test.cc',
+  include_directories : inc_dir,
+  install : false
+)

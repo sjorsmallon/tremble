@@ -717,3 +717,34 @@ void debug_draw_triangles(
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
+
+
+struct Gl_Texture
+{
+    uint32_t handle;
+    uint32_t width;
+    uint32_t height;
+    // configuration? what attributes are active?
+};
+
+
+Gl_Texture create_texture(std::vector<uint8_t>& data, int width, int height)
+{
+        // Upload the atlas to OpenGL
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data.data());
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // unbind texture?
+    // glBindTexture(GL_TEXTURE_2D, 0);
+    Gl_Texture gl_texture{};
+    gl_texture.handle = texture;
+
+    return gl_texture;
+}
