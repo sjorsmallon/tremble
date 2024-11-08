@@ -65,7 +65,6 @@ Font create_font_at_size(std::string_view path, int font_height)
     font.line_height = line_height;
     font.scale = scale;
 
-
     return font;
 }
 
@@ -99,3 +98,5 @@ inline Font_Texture_Atlas create_font_texture_atlas(Font& font, int width, int h
 
 	return font_texture_atlas;
 }
+
+

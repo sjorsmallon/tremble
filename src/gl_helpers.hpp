@@ -8,6 +8,30 @@
 #include <iostream>
 #include <fstream>
 
+
+// move this to file.
+std::string file_to_string(const std::string& filename)
+{
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    if (!file) {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
+
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::string content;
+    content.resize(size);
+
+    if (!file.read(&content[0], size))
+    {
+        throw std::runtime_error("Error reading file: " + filename);
+    }
+
+    return content;
+}
+
 // openGL error callback
 void GLAPIENTRY opengl_message_callback(
     GLenum source,
@@ -46,30 +70,6 @@ void GLAPIENTRY opengl_message_callback(
     }
 }
 
-
-std::string file_to_string(const std::string& filename)
-{
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("Could not open file: " + filename);
-    }
-
-    file.seekg(0, std::ios::end);
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    std::string content;
-    content.resize(size);
-
-    if (!file.read(&content[0], size))
-    {
-        throw std::runtime_error("Error reading file: " + filename);
-    }
-
-    return content;
-}
-
-
 inline void set_global_gl_settings()
 {
    //----modify global openGL state
@@ -93,228 +93,11 @@ inline void set_global_gl_settings()
 
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDisable(GL_FRAMEBUFFER_SRGB);
-
     }
 }
 
-
-struct GL_Buffer
-{
-    uint32_t VAO;
-    uint32_t VBO;
-    uint32_t vertex_count;
-};
-
-// FIXME: actually, I like that we had a vector of float instead of vector of xnc. can we still fix this?
-// in the future. maybe.
-
-
-GL_Buffer create_x_buffer(const std::vector<vec3>& values)
-{
-    GL_Buffer gl_buffer{};
-
-    // Generate and bind VAO and VBO
-    glGenVertexArrays(1, &gl_buffer.VAO); 
-    glGenBuffers(1, &gl_buffer.VBO);
-    glBindVertexArray(gl_buffer.VAO);
-
-    // Fill the buffer with vertex data (position only)
-    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
-    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vec3), values.data(), GL_STATIC_DRAW); // yikes, that was wrong.
-
-    // Attribute IDs and layout for position
-    const int32_t position_attribute_id = 0;
-    const int32_t position_float_count = 3;
-    const int32_t position_byte_offset = 0;
-    const int32_t vertex_byte_stride = position_float_count * sizeof(float);
-
-    // Set the vertex count
-    gl_buffer.vertex_count = values.size();
-
-    // Enable and specify the position attribute (vec3)
-    glEnableVertexAttribArray(position_attribute_id);
-    glVertexAttribPointer(
-        position_attribute_id,
-        position_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)position_byte_offset
-    );
-
-    // Unbind the buffer and VAO
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    return gl_buffer;
-}
-
-
-
-GL_Buffer create_interleaved_xu_buffer(const std::vector<vertex_xu>& values)
-{
-    GL_Buffer gl_buffer{};
-
-    // Generate and bind VAO and VBO
-    glGenVertexArrays(1, &gl_buffer.VAO); 
-    glGenBuffers(1, &gl_buffer.VBO);
-    glBindVertexArray(gl_buffer.VAO);
-
-    // Fill the buffer with vertex data (position only)
-    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
-    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vertex_xu), values.data(), GL_STATIC_DRAW);
-
-    // Attribute IDs and layout for position
-    const int32_t position_attribute_id = 0;
-    const int32_t uv_attribute_id = 1;
-
-    const int32_t position_float_count = 3;
-    const int32_t uv_float_count = 2;
-
-    const int32_t position_byte_offset = 0;
-    const int32_t uv_byte_offset = position_float_count * sizeof(float);
-
-    const int32_t vertex_float_count = position_float_count + uv_float_count;
-    const int32_t vertex_byte_stride = vertex_float_count * sizeof(float);
-
-    // Set the vertex count
-    gl_buffer.vertex_count = values.size();
-
-    // Enable and specify the position attribute (vec3)
-    glEnableVertexAttribArray(position_attribute_id);
-    glVertexAttribPointer(
-        position_attribute_id,
-        position_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)position_byte_offset
-    );
-
-    glEnableVertexAttribArray(uv_attribute_id);
-    glVertexAttribPointer(
-        uv_attribute_id,
-        uv_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)uv_byte_offset
-    );
-
-
-    // Unbind the buffer and VAO
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    return gl_buffer;
-}
-
-
-
-
-GL_Buffer create_interleaved_xnc_buffer(const std::vector<vertex_xnc>& interleaved_xnc_values)
-{
-    GL_Buffer gl_buffer{};
-
-    glGenVertexArrays(1, &gl_buffer.VAO); 
-    glGenBuffers(1,      &gl_buffer.VBO);
-    glBindVertexArray(gl_buffer.VAO);
-
-    // fill buffer with vertices.
-    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
-    glBufferData(GL_ARRAY_BUFFER, interleaved_xnc_values.size() * sizeof(vertex_xnc), interleaved_xnc_values.data(), GL_STATIC_DRAW);
-
-    // actually, I kind of like what I was doing here. I refactored it in a minor fashion for a different type and I did not really mind.
-    const int32_t position_attribute_id = 0;
-    const int32_t normal_attribute_id   = 1;
-    const int32_t color_attribute_id    = 2;
-
-    const int32_t position_float_count  = 3;
-    const int32_t normal_float_count    = 3;
-    const int32_t color_float_count     = 4;
-
-    const int32_t position_byte_offset  = 0; // 0
-    const int32_t normal_byte_offset    =  position_float_count * sizeof(float); // 3
-    const int32_t color_byte_ofset      = (position_float_count + normal_float_count) * sizeof(float); // 6
-
-    const int32_t vertex_float_count    = position_float_count + normal_float_count + color_float_count; // (3 + 3 + 4 = 10)
-    const int32_t vertex_byte_stride    = vertex_float_count * sizeof(float); // oh. I wonder if this can cause giant issues with padding?
-
-    // set vertex count.
-    gl_buffer.vertex_count = interleaved_xnc_values.size(); 
-
-    // position vertex attribute
-    glEnableVertexAttribArray(position_attribute_id);
-    glVertexAttribPointer(
-        position_attribute_id,
-        position_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)position_byte_offset
-        );
-
-    // normal vertex attribute
-    glEnableVertexAttribArray(normal_attribute_id);
-    glVertexAttribPointer(
-        normal_attribute_id,
-        normal_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)normal_byte_offset
-        );
-
-    // texture vertex attribute
-    glEnableVertexAttribArray(color_attribute_id);
-    glVertexAttribPointer(
-        color_attribute_id,
-        color_float_count,
-        GL_FLOAT,
-        GL_FALSE,
-        vertex_byte_stride,
-        (void*)color_byte_ofset
-        );
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    return gl_buffer;
-}
-
-
-
-// we're at the point where maybe we should generalize this. is it possible to do this at compile time? by looking at the types?
-
-
-std::vector<vertex_xnc> create_default_triangle()
-{
-    std::vector<vertex_xnc> triangle;
-
-    // Define vertices with positions in NDC
-    triangle.push_back({
-        .position = vec3{-1.0f, -1.0f, 0.0f}, // Bottom-left (Red)
-        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
-        .color = vec4{1.0f, 0.0f, 0.0f, 1.0f} // Red
-    });
-
-    triangle.push_back({
-        .position = vec3{1.0f, -1.0f, 0.0f},  // Bottom-right (Blue)
-        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
-        .color = vec4{0.0f, 0.0f, 1.0f, 1.0f} // Blue
-    });
-
-    triangle.push_back({
-        .position = vec3{0.0f, 1.0f, 0.0f},   // Top (Green)
-        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
-        .color = vec4{0.0f, 1.0f, 0.0f, 1.0f} // Green
-    });
-
-    return triangle;
-}
-
 // Shader stuff.
-bool check_program_link_status(GLuint program) 
+inline bool check_program_link_status(GLuint program) 
 {
     GLint success{}; 
     glGetProgramiv(program, GL_LINK_STATUS, &success); 
@@ -332,7 +115,7 @@ bool check_program_link_status(GLuint program)
     return true; 
 }
 
-bool check_shader_compile_status(GLuint shader)
+inline bool check_shader_compile_status(GLuint shader)
 {
     GLint success{}; 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success); 
@@ -341,7 +124,7 @@ bool check_shader_compile_status(GLuint shader)
     { 
         char info_log[512]; 
         glGetShaderInfoLog(shader, sizeof(info_log), nullptr, info_log);
-        std::print("ERROR::SHADER::COMPILATION_FAILED. openGL error {}\n",info_log); 
+        std::print("ERROR::SHADER::COMPILATION_FAILED. openGL error: {}\n",info_log); 
         return false;
     }
     
@@ -350,10 +133,6 @@ bool check_shader_compile_status(GLuint shader)
     return true;
 }
 
-struct Shader_Program
-{
-    uint32_t id;
-};
 
 uint32_t create_shader_program(
     const char* vertex_shader_source,
@@ -362,6 +141,7 @@ uint32_t create_shader_program(
     // Create vertex shader
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &vertex_shader_source, nullptr);
+    std::print("compiling Vertex shader.", vertex_shader_source);
     glCompileShader(vertex_shader);
     if (!check_shader_compile_status(vertex_shader))
     {
@@ -372,6 +152,7 @@ uint32_t create_shader_program(
     // Create fragment shader
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment_shader, 1, &fragment_shader_source, nullptr);
+    std::print("compiling Fragment shader.", fragment_shader_source);
     glCompileShader(fragment_shader);
     if (!check_shader_compile_status(fragment_shader))
     {
@@ -401,6 +182,7 @@ uint32_t create_shader_program(
     // Shader shader{.id = program};
     return program;
 }
+
 
 //@Note: we can do some real shit if we compile this thing beforehand,
 // and store the uniforms already.
@@ -474,7 +256,241 @@ void print_shader_uniforms(GLuint shader_program)
     }
 }
 
+//------------------------------------------------------------------------
+// stuff below this line is just me spitballing. everything above it can be yoinked and placed 
+// in any other program with minor changes (std::print, glm::vec3.)
 
+struct GL_Buffer
+{
+    uint32_t VAO;
+    uint32_t VBO;
+    uint32_t vertex_count;
+};
+
+// FIXME: actually, I like that we had a vector of float instead of vector of xnc. can we still fix this?
+// in the future. maybe.
+
+GL_Buffer create_x_buffer(const std::vector<vec3>& values)
+{
+    GL_Buffer gl_buffer{};
+
+    // Generate and bind VAO and VBO
+    glGenVertexArrays(1, &gl_buffer.VAO); 
+    glGenBuffers(1, &gl_buffer.VBO);
+    glBindVertexArray(gl_buffer.VAO);
+
+    // Fill the buffer with vertex data (position only)
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vec3), values.data(), GL_STATIC_DRAW); // yikes, that was wrong.
+
+    // Attribute IDs and layout for position
+    const int32_t position_attribute_id = 0;
+    const int32_t position_float_count = 3;
+    const int32_t position_byte_offset = 0;
+    const int32_t vertex_byte_stride = position_float_count * sizeof(float);
+
+    // Set the vertex count
+    gl_buffer.vertex_count = values.size();
+
+    // Enable and specify the position attribute (vec3)
+    glEnableVertexAttribArray(position_attribute_id);
+    glVertexAttribPointer(
+        position_attribute_id,
+        position_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)position_byte_offset
+    );
+
+    // Unbind the buffer and VAO
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return gl_buffer;
+}
+
+GL_Buffer create_interleaved_xu_buffer(const std::vector<vertex_xu>& values)
+{
+    GL_Buffer gl_buffer{};
+
+    // Generate and bind VAO and VBO
+    glGenVertexArrays(1, &gl_buffer.VAO); 
+    glGenBuffers(1, &gl_buffer.VBO);
+    glBindVertexArray(gl_buffer.VAO);
+
+    // Fill the buffer with vertex data (position only)
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferData(GL_ARRAY_BUFFER, values.size() * sizeof(vertex_xu), values.data(), GL_STATIC_DRAW);
+
+    // Attribute IDs and layout for position
+    const int32_t position_attribute_id = 0;
+    const int32_t uv_attribute_id = 1;
+
+    const int32_t position_float_count = 3;
+    const int32_t uv_float_count = 2;
+
+    const int32_t position_byte_offset = 0;
+    const int32_t uv_byte_offset = position_float_count * sizeof(float);
+
+    const int32_t vertex_float_count = position_float_count + uv_float_count;
+    const int32_t vertex_byte_stride = vertex_float_count * sizeof(float);
+
+    // Set the vertex count
+    gl_buffer.vertex_count = values.size();
+
+    // Enable and specify the position attribute (vec3)
+    glEnableVertexAttribArray(position_attribute_id);
+    glVertexAttribPointer(
+        position_attribute_id,
+        position_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)position_byte_offset
+    );
+
+    glEnableVertexAttribArray(uv_attribute_id);
+    glVertexAttribPointer(
+        uv_attribute_id,
+        uv_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)uv_byte_offset
+    );
+
+    // Unbind the buffer and VAO
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return gl_buffer;
+}
+
+GL_Buffer create_interleaved_xnc_buffer(const std::vector<vertex_xnc>& interleaved_xnc_values)
+{
+    GL_Buffer gl_buffer{};
+
+    glGenVertexArrays(1, &gl_buffer.VAO); 
+    glGenBuffers(1,      &gl_buffer.VBO);
+    glBindVertexArray(gl_buffer.VAO);
+
+    // fill buffer with vertices.
+    glBindBuffer(GL_ARRAY_BUFFER, gl_buffer.VBO);
+    glBufferData(GL_ARRAY_BUFFER, interleaved_xnc_values.size() * sizeof(vertex_xnc), interleaved_xnc_values.data(), GL_STATIC_DRAW);
+
+    // actually, I kind of like what I was doing here. I refactored it in a minor fashion for a different type and I did not really mind.
+    const int32_t position_attribute_id = 0;
+    const int32_t normal_attribute_id   = 1;
+    const int32_t color_attribute_id    = 2;
+
+    const int32_t position_float_count  = 3;
+    const int32_t normal_float_count    = 3;
+    const int32_t color_float_count     = 4;
+
+    const int32_t position_byte_offset  = 0; // 0
+    const int32_t normal_byte_offset    =  position_float_count * sizeof(float); // 3
+    const int32_t color_byte_ofset      = (position_float_count + normal_float_count) * sizeof(float); // 6
+
+    const int32_t vertex_float_count    = position_float_count + normal_float_count + color_float_count; // (3 + 3 + 4 = 10)
+    const int32_t vertex_byte_stride    = vertex_float_count * sizeof(float); // oh. I wonder if this can cause giant issues with padding?
+
+    // set vertex count.
+    gl_buffer.vertex_count = interleaved_xnc_values.size(); 
+
+    // position vertex attribute
+    glEnableVertexAttribArray(position_attribute_id);
+    glVertexAttribPointer(
+        position_attribute_id,
+        position_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)position_byte_offset
+        );
+
+    // normal vertex attribute
+    glEnableVertexAttribArray(normal_attribute_id);
+    glVertexAttribPointer(
+        normal_attribute_id,
+        normal_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)normal_byte_offset
+        );
+
+    // texture vertex attribute
+    glEnableVertexAttribArray(color_attribute_id);
+    glVertexAttribPointer(
+        color_attribute_id,
+        color_float_count,
+        GL_FLOAT,
+        GL_FALSE,
+        vertex_byte_stride,
+        (void*)color_byte_ofset
+        );
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return gl_buffer;
+}
+
+struct Shader_Program
+{
+    uint32_t id;
+};
+
+// we are ignoring z because this is intended to be used for pixel coordinates. 
+std::vector<vertex_xu> generate_vertex_xu_quad(const vec2& min, const vec2& max)
+{
+    // this should be in draw_console, but I need to think about what we need to do.
+    // draw transparent half-screen quad. this is in pixels.
+    vertex_xu top_left     = vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
+    vertex_xu top_right    = vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
+    vertex_xu bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
+    vertex_xu bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
+
+    auto vertices = std::vector<vertex_xu>{
+        top_left,
+        bottom_left,
+        bottom_right,
+        top_left,
+        bottom_right,
+        top_right
+    };
+
+    return vertices;
+}
+
+
+// we're at the point where maybe we should generalize this. is it possible to do this at compile time? by looking at the types?
+std::vector<vertex_xnc> create_default_triangle()
+{
+    std::vector<vertex_xnc> triangle;
+
+    // Define vertices with positions in NDC
+    triangle.push_back({
+        .position = vec3{-1.0f, -1.0f, 0.0f}, // Bottom-left (Red)
+        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
+        .color = vec4{1.0f, 0.0f, 0.0f, 1.0f} // Red
+    });
+
+    triangle.push_back({
+        .position = vec3{1.0f, -1.0f, 0.0f},  // Bottom-right (Blue)
+        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
+        .color = vec4{0.0f, 0.0f, 1.0f, 1.0f} // Blue
+    });
+
+    triangle.push_back({
+        .position = vec3{0.0f, 1.0f, 0.0f},   // Top (Green)
+        .normal = vec3{0.0f, 0.0f, 1.0f},     // Normal pointing up
+        .color = vec4{0.0f, 1.0f, 0.0f, 1.0f} // Green
+    });
+
+    return triangle;
+}
 
 
 // Function to generate a quad defined by a plane's normal and position
@@ -495,8 +511,6 @@ std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, co
 
     float half_width = width * 0.5f;
     float half_height = height * 0.5f;
-
-
 
     // Now calculate the positions of the quad's 4 vertices in world space
     // Top-left (in local space relative to the center)
@@ -521,7 +535,6 @@ std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, co
 
     return vertices;
 }
-
 
 inline uint32_t create_x_shader_program()
 {
@@ -557,8 +570,6 @@ inline uint32_t create_x_shader_program()
 
     return x_shader_program;
 }
-
-
 
 inline uint32_t create_interleaved_xnc_shader_program()
 {
@@ -644,6 +655,93 @@ inline uint32_t create_interleaved_xnc_shader_program()
 
 
 
+
+struct Gl_Texture
+{
+    uint32_t handle;
+    uint32_t width;
+    uint32_t height;
+    // configuration? what attributes are active?
+};
+
+Gl_Texture create_texture(std::vector<uint8_t>& data, int width, int height)
+{
+    // Upload the atlas to OpenGL
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data.data());
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // unbind texture?
+    // glBindTexture(GL_TEXTURE_2D, 0);
+    Gl_Texture gl_texture{};
+    gl_texture.handle = texture;
+
+    return gl_texture;
+}
+
+
+// ---- drawing
+
+// there is a better abstraction here that will come later.
+static void draw_triangles(
+    const uint32_t VAO,
+    const uint32_t VBO,
+    const size_t vertex_count,
+    const uint32_t shader_program,
+    const glm::mat4& projection,
+    const glm::mat4& view,
+    const glm::mat4& model,
+    bool wireframe
+    )
+{
+    if (wireframe)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    glDisable(GL_CULL_FACE);
+
+    glUseProgram(shader_program);
+    set_uniform(shader_program, "model", model);
+    set_uniform(shader_program, "view", view);
+    set_uniform(shader_program, "projection", projection);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, vertex_count);
+}
+
+static void draw_lines(
+    const uint32_t VAO,
+    const uint32_t VBO,
+    const size_t vertex_count,
+    const uint32_t shader_program,
+    const glm::mat4& projection,
+    const glm::mat4& view
+    )
+{
+    glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
+ 
+    glUseProgram(shader_program);
+    set_uniform(shader_program, "model", model);
+    set_uniform(shader_program, "view", view);
+    set_uniform(shader_program, "projection", projection);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_LINES, 0, vertex_count);
+}
+
+
+
+
 void debug_draw_arrow(const vec3& start, const vec3& end, float diameter, const vec3& color)
 {
     static bool first_time = true;
@@ -716,35 +814,4 @@ void debug_draw_triangles(
     // Unbind the buffer
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
-}
-
-
-struct Gl_Texture
-{
-    uint32_t handle;
-    uint32_t width;
-    uint32_t height;
-    // configuration? what attributes are active?
-};
-
-
-Gl_Texture create_texture(std::vector<uint8_t>& data, int width, int height)
-{
-        // Upload the atlas to OpenGL
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data.data());
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // unbind texture?
-    // glBindTexture(GL_TEXTURE_2D, 0);
-    Gl_Texture gl_texture{};
-    gl_texture.handle = texture;
-
-    return gl_texture;
 }

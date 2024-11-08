@@ -22,67 +22,16 @@
 #include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
 #include "../src/player_move.hpp"
+#include "../src/font.hpp"
+#include "../src/console.hpp"
 
-
-#define TIMEIT(stmt) do { \
-    auto start = std::chrono::high_resolution_clock::now(); \
-    stmt; \
-    auto end = std::chrono::high_resolution_clock::now(); \
-    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start); \
-    std::print("{} took {:.3f} ms\n", #stmt, diff.count() / 1000.0); \
-} while(0)
-
-// there is a better abstraction here that will come later.
-static void draw_triangles(
-    const uint32_t VAO,
-    const uint32_t VBO,
-    const size_t vertex_count,
-    const uint32_t shader_program,
-    const glm::mat4& projection,
-    const glm::mat4& view,
-    const glm::mat4& model,
-    bool wireframe
-    )
-{
-    if (wireframe)
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-    else
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-    glDisable(GL_CULL_FACE);
-
-    glUseProgram(shader_program);
-    set_uniform(shader_program, "model", model);
-    set_uniform(shader_program, "view", view);
-    set_uniform(shader_program, "projection", projection);
-
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, vertex_count);
-}
-
-static void draw_lines(
-    const uint32_t VAO,
-    const uint32_t VBO,
-    const size_t vertex_count,
-    const uint32_t shader_program,
-    const glm::mat4& projection,
-    const glm::mat4& view
-    )
-{
-    glm::mat4 model = glm::mat4(1.0f); // Identity matrix (no transformation)
- 
-    glUseProgram(shader_program);
-    set_uniform(shader_program, "model", model);
-    set_uniform(shader_program, "view", view);
-    set_uniform(shader_program, "projection", projection);
-
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_LINES, 0, vertex_count);
-}
-
+std::vector<vertex_xu> quadVertices = {
+    // Positions         // Texture Coords
+    vertex_xu{vec3{-1.0f,  1.0f, 0.0f},   vec2{0.0f, 1.0f}},  // Top-left
+    vertex_xu{vec3{ 1.0f,  1.0f, 0.0f},   vec2{1.0f, 1.0f}},  // Top-right
+    vertex_xu{vec3{-1.0f, -1.0f, 0.0f},   vec2{0.0f, 0.0f}},  // Bottom-left
+    vertex_xu{vec3{ 1.0f, -1.0f, 0.0f},   vec2{1.0f, 0.0f}}   // Bottom-right
+};
 
 
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
@@ -196,17 +145,23 @@ int main(int argc, char *argv[])
         SDL_GL_MakeCurrent(window, gl_context);
 
         // enable vsync
-        // std::print("WARNING: vsync is ON.\n");
         SDL_GL_SetSwapInterval(0);
 
         set_global_gl_settings();
     }    
-    // shaders related
-    uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-    // uint32_t x_shader_program = create_x_shader_program();
+    // font stuff
+    Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", 32);
 
-    // base AABB.
-    auto path = std::string{"../data/list_of_AABB"};
+    // shaders
+    uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
+
+
+    auto vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
+    auto fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
+    uint32_t xu_shader_program = create_shader_program(vertex_shader_string.c_str(), fragment_shader_string.c_str());
+
+    // base geometry
+    auto path = std::string{"../data/texture_test"};
     auto aabbs = read_AABBs_from_file(path);
     auto aabbs_vertices  = to_vertex_xnc(aabbs);
     // i do not trust auto assignment.
@@ -225,74 +180,61 @@ int main(int argc, char *argv[])
         bsp = build_bsp(face_indices, aabbs_vertices);
     }
 
-    // uv grid related.
-    auto uv_grid_vertex_shader_str = file_to_string("../data/shaders/grid/grid.vert");
-    auto uv_grid_fragment_shader_str = file_to_string("../data/shaders/grid/grid.frag");
-    vec2 grid_world_space_dimensions = vec2{1000.f, 1000.f};
-    auto uv_grid_vertices = generate_vertex_xu_quad_from_plane(vec3{0.0f, 0.0f, 0.0f}, vec3{0.0f,0.0f,1.0f}, grid_world_space_dimensions.x, grid_world_space_dimensions.y);
+    // console geometry
+    auto min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
+    auto max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
+    auto console_background_vertices = generate_vertex_xu_quad(min, max);
+    auto bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
+    auto bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
+    auto text_entry_bar_vertices = generate_vertex_xu_quad(bar_min, bar_max);
 
-    auto uv_grid_shader_program = create_shader_program(
-        uv_grid_vertex_shader_str.c_str(),
-        uv_grid_fragment_shader_str.c_str()
-    );
-
-    if (!uv_grid_shader_program)
-    {
-        int result = MessageBox(NULL, "failed to compile uv grid shader.", "Error", MB_ICONERROR | MB_RETRYCANCEL);
-        if (result == IDCANCEL)
-        {
-            SDL_Quit();
-            return -1;
-        }
-    }
-
-    set_uniform(uv_grid_shader_program, "line_thickness", 10.0f);
-    set_uniform(uv_grid_shader_program, "grid_dimensions", grid_world_space_dimensions);
-    auto uv_grid_gl_buffer = create_interleaved_xu_buffer(uv_grid_vertices);
-
+    // I don't care.
+    auto all_console_vertices = concatenate(console_background_vertices, text_entry_bar_vertices);
+    auto console_gl_buffer = create_interleaved_xu_buffer(all_console_vertices);
 
     // game loop state
-    bool noclip = false;
     bool running = true;
     SDL_Event event;
+    float dt = 0.f;
+    float mouse_x{};
+    float mouse_y{};
+    float last_mouse_x{};
+    float last_mouse_y{};
+    uint64_t now = SDL_GetPerformanceCounter();
+    uint64_t last = 0.f;
+   
+    // game systems
+    Console console{}; // in-game console
 
     // game state.
+    bool noclip = false;
+    bool showing_console = false;
+
     auto camera = Camera{};
     camera.yaw= -90.f;
     camera.pitch = 0.f;
-
     float noclip_move_speed = 500.0f;
     float mouse_sensitivity = 2.0f;
     float fov = 90.0f;
     float near_z = 0.1f;
     float far_z = 4000.f;
-    float dt = 0.f;
-    uint64_t now = SDL_GetPerformanceCounter();
-    uint64_t last = 0.f;
-    float mouse_x{};
-    float mouse_y{};
-    float last_mouse_x{};
-    float last_mouse_y{};
     vec3 world_up = vec3{0.f, 1.f, 0.f};
 
     // entity related
     vec3 player_velocity{};
     vec3 player_position{-6.0320406, 10, 580.2726};
-    auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}};
+    auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}}; // 40 x, 65 y (20 off the floor), 40 z.
     auto player_aabb_vertices = to_vertex_xnc(player_aabb);
     auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
 
     Move_Input move_input{};
-    Trace trace{};
-
+     // so we can render the "last" colliding hitbox so I can do some manual inspection.
+    glm::mat4 aabb_transform_matrix(1.0f);
     std::vector<size_t> previous_face_indices{};
-    glm::mat4 aabb_transform_matrix(1.0f); // so we can render the "last" colliding hitbox so I can do some manual inspection.
+
+
     while (running)
     {
-        // reset trace.
-        trace.collided = false;
-        trace.face_normal = vec3{0.0f, 0.0f, 0.0f};
-
         last = now;
         //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
         now = SDL_GetPerformanceCounter();
@@ -307,23 +249,14 @@ int main(int argc, char *argv[])
             // ignore all events except quit (alt-f4, pressing x, etc)
             if (event.type == SDL_EVENT_QUIT)
             {
-                running = false;  // Break out of the loop to quit the application
+                running = false;
             }
 
-            if (event.type == SDL_EVENT_KEY_UP)
+            if (event.type == SDL_EVENT_KEY_UP) // not key down? should we add a grace period?
             {
                 if ((event.key.key == SDLK_TILDE) || (event.key.key == SDLK_GRAVE))
-                {
-                    // toggle noclip.                   
-                    noclip = 1 - noclip;
-                    std::print("noclip status: {}\n", (noclip ? "on" : "off"));
-                    // set the player velocity in the camera viewing direction.
-                    glm::vec3 vel = camera.front * noclip_move_speed;
-                    player_velocity = vec3{vel.x, vel.y, vel.z}; 
-
-                    glm::vec3 position = glm::vec3(player_position.x, player_position.y, player_position.z);
-                    // transformation matrix.
-                    aabb_transform_matrix = glm::translate(glm::mat4(1.0f), position);
+                {   
+                    showing_console = !showing_console;
                 }
             }
 
@@ -334,13 +267,13 @@ int main(int argc, char *argv[])
             const bool* key_state = SDL_GetKeyboardState(NULL);
             if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
 
-            // Handle continuous key press movement
             move_input.forward_pressed  = key_state[SDL_SCANCODE_W];
             move_input.backward_pressed = key_state[SDL_SCANCODE_S];
             move_input.left_pressed     = key_state[SDL_SCANCODE_A];
             move_input.right_pressed    = key_state[SDL_SCANCODE_D];
             move_input.jump_pressed     = key_state[SDL_SCANCODE_SPACE];
 
+            // P -> print player position info.
             if (key_state[SDL_SCANCODE_P])
             {
                     std::print("player_position: {}\n", player_position);
@@ -423,7 +356,6 @@ int main(int argc, char *argv[])
                             // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
                             if (triangle_aabb.max.y - aabb.min.y < 5.f)
                             {
-                                std::print("ground overlap: {}\n", overlap);
                                 ground_face_indices.push_back(face_idx);
                             }
                         }
@@ -432,7 +364,6 @@ int main(int argc, char *argv[])
                             // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
                             if (fabs(triangle_aabb.max.y - aabb.max.y)  < 5.f)
                             {
-                                std::print("ceiling overlap: {}\n", overlap);
                                 ceiling_face_indices.push_back(face_idx);
                             }
                         }
@@ -442,7 +373,6 @@ int main(int argc, char *argv[])
                             //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
                             if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
                             {
-                                std::print("wall overlap: {}\n", overlap);
                                 wall_face_indices.push_back(face_idx);
                             }
                         }
@@ -503,9 +433,7 @@ int main(int argc, char *argv[])
                 auto ground_planes  = create_planes_from_face_indices(ground_face_indices, aabbs_vertices);
                 auto ceiling_planes = create_planes_from_face_indices(ceiling_face_indices, aabbs_vertices);
                 auto wall_planes    = create_planes_from_face_indices(wall_face_indices, aabbs_vertices);
-
                 auto collider_planes = Collider_Planes{.ground_planes = std::move(ground_planes), .ceiling_planes = std::move(ceiling_planes), .wall_planes = std::move(wall_planes)};
-
 
                 auto [new_position, new_velocity] = player_move(
                     move_input,
@@ -533,16 +461,38 @@ int main(int argc, char *argv[])
             }
         }
 
-        //@Note: mouse input is no longer degenerate, it was caused by dt being 0 because of narrowing to float.
+        // mouse stuff.
         {
             uint32_t mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
-            if (!mouse_state) //@Note this is just to stop the whining about mouse_state being unused.
-            {
-
-            }
+            if (!mouse_state) {} //@Note this is just to stop the whining about mouse_state being unused.
             int dx = mouse_x - last_mouse_x;
             int dy = mouse_y - last_mouse_y;
             camera = look_around(camera, dx, dy, mouse_sensitivity);
+
+            if (mouse_state & SDL_BUTTON_X1MASK)
+            {
+                noclip = true;
+                // toggle noclip.                       
+                // noclip = 1 - noclip;
+                // std::print("noclip status: {}\n", (noclip ? "on" : "off"));
+                // set the player velocity in the camera viewing direction.
+                glm::vec3 vel = camera.front * noclip_move_speed;
+                player_velocity = vec3{vel.x, vel.y, vel.z}; 
+
+                glm::vec3 position = glm::vec3(player_position.x, player_position.y, player_position.z);
+                // transformation matrix.
+                aabb_transform_matrix = glm::translate(glm::mat4(1.0f), position);
+                std::print("x2 pressed\n");
+            }
+            else
+            {
+                noclip = false;
+            }
+
+
+
+
+
         }
 
         // rendering code goes here.
@@ -551,29 +501,25 @@ int main(int argc, char *argv[])
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
             // aabbs.
-
-
             draw_triangles(aabb_gl_buffer.VAO, aabb_gl_buffer.VBO, aabb_gl_buffer.vertex_count, xnc_shader_program,
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
                 glm::mat4(1.0f),
-                true // wireframe
+                false // wireframe
                 );
 
+            // upon entering noclip, draw the last collision.
             if (noclip)
             {
-                // not only toggle noclip, also draw the aabb at the last position.
+                //  also draw the aabb at the last position.
                 draw_triangles(player_aabb_gl_buffer.VAO, player_aabb_gl_buffer.VBO, player_aabb_gl_buffer.vertex_count, xnc_shader_program,
                 glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                 get_look_at_view_matrix(camera),
                 aabb_transform_matrix,
-                true //wireframe
+                false //wireframe
                 );
-            }
 
-            if (noclip)
-            {
-
+                // these are the faces we collided with.
                 auto construct_faces = [](const std::vector<vertex_xnc>& aabbs_vertices, const std::vector<size_t>& face_indices) {
                     std::vector<vertex_xnc> faces;
                     for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
@@ -586,7 +532,7 @@ int main(int argc, char *argv[])
                             faces.push_back(v2);
                     }
 
-                    return faces; // Return the constructed vector of faces
+                    return faces;
                 };
 
                 auto faces = construct_faces(aabbs_vertices, previous_face_indices);
@@ -597,25 +543,31 @@ int main(int argc, char *argv[])
                     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
                     get_look_at_view_matrix(camera),
                     glm::mat4(1.0f));
-
                 }
             }
 
-            // uv grid
-            // draw_triangles(uv_grid_gl_buffer.VAO, uv_grid_gl_buffer.VBO, uv_grid_gl_buffer.vertex_count, uv_grid_shader_program,
-            //     glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            //     get_look_at_view_matrix(camera),
-            //     glm::mat4(1.0f)
-            //     );
+            if (showing_console)
+            {
+                // map everything between -1 z and + 1 z. so all of these vertices should have a z between those bounds.
+                float min_z = -1.0f;
+                float max_z = 1.0f;
+                glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
+                set_uniform(xu_shader_program, "color", vec3{7.0f/255.f, 38.0f/255.f, 38.0f/255.f});
+                draw_triangles(
+                    console_gl_buffer.VAO,
+                    console_gl_buffer.VBO,
+                    console_gl_buffer.vertex_count,
+                    xu_shader_program,
+                    projection,
+                    glm::mat4(1.0f), // identity view matrix.
+                    glm::mat4(1.0f), // identity transformation matrix.
+                    false
+                    );
 
-            // player bounding box.
-            // vec3 target_position = player_position + (20.f * vec3{camera.front.x, camera.front.y, camera.front.z});
+                // draw_console(console);
+            }
 
-            // draw_triangles(player_aabb_gl_buffer.VAO, player_aabb_gl_buffer.VBO, player_aabb_gl_buffer.vertex_count, xnc_shader_program,
-            // glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-            // get_look_at_view_matrix(camera),
-            // glm::translate(glm::mat4(1.0f), glm::vec3(target_position.x, target_position.y, target_position.z))  
-            // );
+
         }
 
         SDL_GL_SwapWindow(window);

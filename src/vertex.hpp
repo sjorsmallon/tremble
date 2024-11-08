@@ -41,4 +41,3 @@ struct std::formatter<vertex_xu> : std::formatter<std::string> {
 };
 
 
-

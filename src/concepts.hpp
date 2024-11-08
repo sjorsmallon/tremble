@@ -10,8 +10,6 @@ template<typename Type>
 // concept Pod = std::is_trivial_v<T> && std::is_standard_layout_v<T>;
 concept Pod = std::is_standard_layout_v<Type> && std::is_trivially_copyable_v<Type> && is_non_zero<Type>;
 
-
-
 template<Pod Type>
 class PodVector : public std::vector<Type> {
     // PodVector inherits all functionality of std::vector<T>
@@ -33,10 +31,26 @@ concept PodVectorConcept = requires {
     requires Pod<typename T::value_type>; // Ensure value_type is Pod
 };
 
+
 template <typename T>
-class RingBuffer {
+std::vector<T> concatenate(const std::vector<T>& vec1, const std::vector<T>& vec2) {
+    std::vector<T> result;
+    result.reserve(vec1.size() + vec2.size()); // Preallocate memory for efficiency
+
+    // Insert elements from both vec1 and vec2
+    result.insert(result.end(), vec1.begin(), vec1.end());
+    result.insert(result.end(), vec2.begin(), vec2.end());
+
+    return result;
+}
+
+
+
+template <typename T>
+class Ring_Buffer
+{
 public:
-    explicit RingBuffer(size_t capacity) 
+    explicit Ring_Buffer(size_t capacity) 
         : m_buffer(capacity), m_head(0), m_size(0), m_capacity(capacity) {}
 
     void push(const T& item) {
@@ -89,3 +103,13 @@ private:
     size_t m_size;           // Current number of items in the buffer
     size_t m_capacity;       // Maximum capacity of the buffer
 };
+
+
+#define TIMEIT(stmt) do { \
+    auto start = std::chrono::high_resolution_clock::now(); \
+    stmt; \
+    auto end = std::chrono::high_resolution_clock::now(); \
+    auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start); \
+    std::print("{} took {:.3f} ms\n", #stmt, diff.count() / 1000.0); \
+} while(0)
+
