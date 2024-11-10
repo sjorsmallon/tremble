@@ -2,6 +2,8 @@
 #include <print>
 #include "concepts.hpp" // Ring_Buffer
 
+
+
 struct Console
 {
 	Ring_Buffer<std::string> history = Ring_Buffer<std::string>(1000); // 1000 lines ought to be enough for anybody.
@@ -26,14 +28,13 @@ void handle_keystroke(Console& console, char key)
     }
 }
 
-void render_line(const std::string_view line, const int start_x, const int start_y)
+void draw_line(const std::string_view line, const int start_x, const int start_y)
 {
 	std::println("render line:[{}]", line);
 }
 
 void draw_console(Console& console)
 {
-
 	constexpr auto height = 400;
 	constexpr auto line_height = 20;
 	constexpr auto margin = 5;
@@ -63,7 +64,7 @@ void draw_console(Console& console)
         {
         	// Calculate the current y position for rendering
             int current_y = start_y + idx * (line_height + margin);
-        	render_line(std::string_view{line}, start_x, current_y);
+        	draw_line(std::string_view{line}, start_x, current_y);
             start_x += 10;
         }
     }

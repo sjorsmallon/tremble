@@ -780,3 +780,25 @@ inline size_t find_closest_proximity_face_index(BSP* bsp, const std::vector<vert
 // get_look_at_view_matrix(camera),
 // glm::translate(glm::mat4(1.0f), glm::vec3(target_position.x, target_position.y, target_position.z))  
 // );
+
+
+
+           if (mouse_state & SDL_BUTTON_X1MASK)
+            {
+                noclip = true;
+                // toggle noclip.                       
+                // noclip = 1 - noclip;
+                // std::print("noclip status: {}\n", (noclip ? "on" : "off"));
+                // set the player velocity in the camera viewing direction.
+                glm::vec3 vel = camera.front * noclip_move_speed;
+                player_velocity = vec3{vel.x, vel.y, vel.z}; 
+
+                glm::vec3 position = glm::vec3(player_position.x, player_position.y, player_position.z);
+                // transformation matrix.
+                aabb_transform_matrix = glm::translate(glm::mat4(1.0f), position);
+                std::print("x2 pressed\n");
+            }
+            else
+            {
+                noclip = false;
+            }

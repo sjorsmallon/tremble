@@ -151,11 +151,31 @@ int main(int argc, char *argv[])
     }    
     // font stuff
     Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", 32);
+    const int font_atlas_width = 1024;
+    const int font_atlas_height = 1024;
+    Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
+    //@FIXME: there have to be better ways to do this.
+    std::vector<vertex_xu> text_character_vertices(512 * 4);
+    for (int idx = 0; idx != 512; idx += 4)
+    {
+        auto& top_left = text_character_vertices[idx];
+        auto& top_right = text_character_vertices[idx + 1];
+        auto& bottom_left = text_character_vertices[idx + 2];
+        auto& bottom_right = text_character_vertices[idx +3];
+
+        auto min = vec2{0.f, 0.f};
+        auto max = vec2{1.f, 1.f};
+
+        top_left     = vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
+        top_right    = vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
+        bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
+        bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
+
+    }
+
 
     // shaders
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-
-
     auto vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
     auto fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
     uint32_t xu_shader_program = create_shader_program(vertex_shader_string.c_str(), fragment_shader_string.c_str());
@@ -181,9 +201,9 @@ int main(int argc, char *argv[])
     }
 
     // console geometry
-    auto min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
-    auto max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
-    auto console_background_vertices = generate_vertex_xu_quad(min, max);
+    auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
+    auto console_max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
+    auto console_background_vertices = generate_vertex_xu_quad(console_min, console_max);
     auto bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
     auto bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
     auto text_entry_bar_vertices = generate_vertex_xu_quad(bar_min, bar_max);
@@ -257,6 +277,14 @@ int main(int argc, char *argv[])
                 if ((event.key.key == SDLK_TILDE) || (event.key.key == SDLK_GRAVE))
                 {   
                     showing_console = !showing_console;
+                }
+            }
+
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
+            {
+                if (event.button.button == SDL_BUTTON_X1)
+                {
+                    noclip = !noclip;
                 }
             }
 
@@ -461,37 +489,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        // mouse stuff.
+        // handle mouse input.
         {
             uint32_t mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
             if (!mouse_state) {} //@Note this is just to stop the whining about mouse_state being unused.
             int dx = mouse_x - last_mouse_x;
             int dy = mouse_y - last_mouse_y;
             camera = look_around(camera, dx, dy, mouse_sensitivity);
-
-            if (mouse_state & SDL_BUTTON_X1MASK)
-            {
-                noclip = true;
-                // toggle noclip.                       
-                // noclip = 1 - noclip;
-                // std::print("noclip status: {}\n", (noclip ? "on" : "off"));
-                // set the player velocity in the camera viewing direction.
-                glm::vec3 vel = camera.front * noclip_move_speed;
-                player_velocity = vec3{vel.x, vel.y, vel.z}; 
-
-                glm::vec3 position = glm::vec3(player_position.x, player_position.y, player_position.z);
-                // transformation matrix.
-                aabb_transform_matrix = glm::translate(glm::mat4(1.0f), position);
-                std::print("x2 pressed\n");
-            }
-            else
-            {
-                noclip = false;
-            }
-
-
-
-
 
         }
 
@@ -519,31 +523,34 @@ int main(int argc, char *argv[])
                 false //wireframe
                 );
 
-                // these are the faces we collided with.
-                auto construct_faces = [](const std::vector<vertex_xnc>& aabbs_vertices, const std::vector<size_t>& face_indices) {
-                    std::vector<vertex_xnc> faces;
-                    for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
-                    {
-                            auto& v0 = aabbs_vertices[face_indices[face_idx]];
-                            auto& v1 = aabbs_vertices[face_indices[face_idx] + 1];
-                            auto& v2 = aabbs_vertices[face_indices[face_idx] + 2];
-                            faces.push_back(v0);   
-                            faces.push_back(v1);
-                            faces.push_back(v2);
-                    }
-
-                    return faces;
-                };
-
-                auto faces = construct_faces(aabbs_vertices, previous_face_indices);
-                if (faces.size() > 0)
+                // draw the faces we collided with (I was using this to disable drawing the rest, and just the colliding faces for debugging.)
                 {
-                    debug_draw_triangles(
-                        faces, 
-                    glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
-                    get_look_at_view_matrix(camera),
-                    glm::mat4(1.0f));
+                    auto construct_faces = [](const std::vector<vertex_xnc>& aabbs_vertices, const std::vector<size_t>& face_indices) {
+                        std::vector<vertex_xnc> faces;
+                        for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
+                        {
+                                auto& v0 = aabbs_vertices[face_indices[face_idx]];
+                                auto& v1 = aabbs_vertices[face_indices[face_idx] + 1];
+                                auto& v2 = aabbs_vertices[face_indices[face_idx] + 2];
+                                faces.push_back(v0);   
+                                faces.push_back(v1);
+                                faces.push_back(v2);
+                        }
+
+                        return faces;
+                    };
+
+                    auto faces = construct_faces(aabbs_vertices, previous_face_indices);
+                    if (faces.size() > 0)
+                    {
+                        debug_draw_triangles(
+                            faces, 
+                        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                        get_look_at_view_matrix(camera),
+                        glm::mat4(1.0f));
+                    }
                 }
+
             }
 
             if (showing_console)
@@ -564,9 +571,59 @@ int main(int argc, char *argv[])
                     false
                     );
 
+                    auto draw_line = [](std::string_view line, Font_Texture_Atlas& atlas, int start_x, int start_y)
+                    {
+                        auto start_x_offset = 0;
+                        for (char character: line)
+                        {
+                            int idx = character - 32; // magic ascii value described in font.hpp (we map the ascii range [32, .. , 32 +96])
+                            if (idx < 0) std::print("[error] character idx < 0. character: {}\n", character);
+
+                            // get bounding box of this character?
+                            auto& character_info = atlas.character_info[idx];
+                             // unsigned short x0,y0,x1,y1; // coordinates of bbox in bitmap
+                             //   float xoff,yoff,xadvance;
+                             //   float xoff2,yoff2;
+                        }
+                    };
+
+                    // requires font_texture_atlas -> font, console.
+                    // draw the console. write it out, and go from there.
+                    const auto line_height = font.line_height;
+                    constexpr auto spacing = 5; // 5 pixels spacing between line
+                    auto start_x = 10; 
+                    auto console_height = fabs(console_max.y - console_min.y);
+                    // render as many history lines as we can fit.
+                    const int lines_to_render = console_height / (line_height + spacing); // character_height?
+                    // start at the top, render to the bottom.
+
+                    size_t history_size = console.history.size();
+                    size_t start_index = (console.history.full() ? console.history.capacity() : history_size) - lines_to_render;
+
+                    if (start_index < 0)
+                    {
+                        start_index += console.history.capacity();
+                    }
+                    int start_y = console_max.y;
+
+                    // Render the history lines (this seems hilariously bad.)
+                    for (int idx = 0; idx < lines_to_render && history_size > 0; ++idx)
+                    {
+                        // Calculate the actual index to render from the ring buffer
+                        size_t index = (start_index + idx) % console.history.capacity();
+                        
+                        std::string line;
+                        if (console.history.get(index, line))
+                        {
+                            // Calculate the current y position for rendering
+                            int current_y = start_y - idx * (line_height + spacing);
+                            draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y);
+                        }
+                    }
+
+
                 // draw_console(console);
             }
-
 
         }
 
