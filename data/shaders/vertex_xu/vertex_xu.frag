@@ -15,6 +15,7 @@ void main()
     // Sample the texture at the given UV coordinates
     // Flip the y-coordinate to correct upside-down texture
     float intensity = texture(text_bitmap, texture_coordinates_fs_in).r;
+    if (intensity < 0.1f) discard;
     
     // Set the fragment color based on the texture sample
     fragment_color = vec4(vec3(intensity, intensity, intensity), 1.f);

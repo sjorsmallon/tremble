@@ -576,7 +576,7 @@ int main(int argc, char *argv[])
                 float min_z = -1.0f;
                 float max_z = 1.0f;
                 glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
-                set_uniform(xu_shader_program, "color", vec3{7.0f/255.f, 38.0f/255.f, 38.0f/255.f});
+                // set_uniform(xu_shader_program, "color", vec3{7.0f/255.f, 38.0f/255.f, 38.0f/255.f});
                 draw_triangles(
                     console_gl_buffer.VAO,
                     console_gl_buffer.VBO,
@@ -619,11 +619,18 @@ int main(int argc, char *argv[])
                             //   float xoff2,yoff2;
 
                             // cast the uv coordinates to float as a factor of its dimensions?
-                            vec2 uv_0 = vec2{
-                                static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
-                                static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
+                            // vec2 uv_0 = vec2{
+                            //     static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
+                            //     static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
+                            // vec2 uv_1 = vec2{
+                            //     static_cast<float>(character_info.x1) / static_cast<float>(atlas.width),
+                            //     static_cast<float>(character_info.y1) / static_cast<float>(atlas.height)};
+
                             vec2 uv_1 = vec2{
                                 static_cast<float>(character_info.x1) / static_cast<float>(atlas.width),
+                                static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
+                            vec2 uv_0 = vec2{
+                                static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
                                 static_cast<float>(character_info.y1) / static_cast<float>(atlas.height)};
 
                             // update the uv mappings.
@@ -636,12 +643,12 @@ int main(int argc, char *argv[])
                             auto& v3 = text_character_vertices[3];
                             auto& v4 = text_character_vertices[4];
                             auto& v5 = text_character_vertices[5];
-                            v0 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
+                            v0 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
                             v1 = vertex_xu{.position = vec3{x_offset,                          static_cast<float>(start_y), 0.f}, .uv = uv_0};
                             v2 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
-                            v3 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
+                            v3 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
                             v4 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
-                            v5 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = uv_1};
+                            v5 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = uv_1};
 
                             // move the cursor along to the width of the characters.
                             x_offset = x_offset + character_info.xadvance;
