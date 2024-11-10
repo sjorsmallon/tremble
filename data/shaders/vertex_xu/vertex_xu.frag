@@ -7,14 +7,15 @@ in vec2 texture_coordinates_fs_in;
 out vec4 fragment_color;
 
 // Texture sampler
-uniform sampler2D textTexture;
+uniform sampler2D text_bitmap;
 uniform vec3 color;
 
 void main()
 {
     // Sample the texture at the given UV coordinates
-    // vec4 sampledColor = texture(textTexture, TexCoord);
+    // Flip the y-coordinate to correct upside-down texture
+    float intensity = texture(text_bitmap, texture_coordinates_fs_in).r;
     
     // Set the fragment color based on the texture sample
-    fragment_color = vec4(color, 0.5f);
+    fragment_color = vec4(vec3(intensity, intensity, intensity), 1.f);
 }

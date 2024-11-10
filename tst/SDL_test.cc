@@ -25,15 +25,6 @@
 #include "../src/font.hpp"
 #include "../src/console.hpp"
 
-std::vector<vertex_xu> quadVertices = {
-    // Positions         // Texture Coords
-    vertex_xu{vec3{-1.0f,  1.0f, 0.0f},   vec2{0.0f, 1.0f}},  // Top-left
-    vertex_xu{vec3{ 1.0f,  1.0f, 0.0f},   vec2{1.0f, 1.0f}},  // Top-right
-    vertex_xu{vec3{-1.0f, -1.0f, 0.0f},   vec2{0.0f, 0.0f}},  // Bottom-left
-    vertex_xu{vec3{ 1.0f, -1.0f, 0.0f},   vec2{1.0f, 0.0f}}   // Bottom-right
-};
-
-
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
@@ -149,36 +140,62 @@ int main(int argc, char *argv[])
 
         set_global_gl_settings();
     }    
+
     // font stuff
     Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", 32);
     const int font_atlas_width = 1024;
     const int font_atlas_height = 1024;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
-    //@FIXME: there have to be better ways to do this.
-    std::vector<vertex_xu> text_character_vertices(512 * 4);
-    for (int idx = 0; idx != 512; idx += 4)
-    {
-        auto& top_left = text_character_vertices[idx];
-        auto& top_right = text_character_vertices[idx + 1];
-        auto& bottom_left = text_character_vertices[idx + 2];
-        auto& bottom_right = text_character_vertices[idx +3];
 
+
+    //@FIXME: there have to be better ways to do this. we should move to index buffers.
+    constexpr auto max_character_count_in_string = 512;
+    constexpr auto vertices_per_character = 6;
+    std::vector<vertex_xu> text_character_vertices(max_character_count_in_string * vertices_per_character);
+    for (int idx = 0; idx != (max_character_count_in_string * vertices_per_character); idx += vertices_per_character)
+    {
         auto min = vec2{0.f, 0.f};
         auto max = vec2{1.f, 1.f};
 
-        top_left     = vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
-        top_right    = vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
-        bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
-        bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
+        vertex_xu top_left     =  vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
+        vertex_xu top_right    =  vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
+        vertex_xu bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
+        vertex_xu bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
 
+        auto& v0 = text_character_vertices[idx];
+        auto& v1 = text_character_vertices[idx + 1];
+        auto& v2 = text_character_vertices[idx + 2];
+        auto& v3 = text_character_vertices[idx + 3];
+        auto& v4 = text_character_vertices[idx + 4];
+        auto& v5 = text_character_vertices[idx + 5];
+
+        v0 = top_left;
+        v1 = bottom_left;
+        v2 = bottom_right;
+        v3 = top_left;
+        v4 = bottom_right;
+        v5 = top_right;
     }
 
+    auto text_character_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
 
     // shaders
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
     auto vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
     auto fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
     uint32_t xu_shader_program = create_shader_program(vertex_shader_string.c_str(), fragment_shader_string.c_str());
+
+    // create a gl texture.
+    GL_Texture font_bitmap_texture = create_texture(
+        Texture_Format::Red, //u8
+        font_texture_atlas.atlas_bitmap,
+        font_texture_atlas.width,
+        font_texture_atlas.height
+        );
+    //@note: please don't forget to bind the texture you fool..
+    glActiveTexture(GL_TEXTURE0 + font_bitmap_texture.texture_unit);
+    set_uniform(xu_shader_program,"text_bitmap", 0);
+
 
     // base geometry
     auto path = std::string{"../data/texture_test"};
@@ -571,20 +588,82 @@ int main(int argc, char *argv[])
                     false
                     );
 
-                    auto draw_line = [](std::string_view line, Font_Texture_Atlas& atlas, int start_x, int start_y)
+                    auto draw_line = [](
+                        std::string_view line,
+                        Font_Texture_Atlas& atlas,
+                        int start_x,
+                        int start_y,
+                        GL_Buffer text_buffer,
+                        uint32_t shader_program,
+                        glm::mat4& projection_matrix
+                        )
                     {
-                        auto start_x_offset = 0;
-                        for (char character: line)
+                        auto max_characters = text_buffer.vertex_count / 6;
+                        assert(line.size() < max_characters);
+                        
+                        float x_offset = start_x;
+                       
+                        // make the vbo active
+                        glBindBuffer(GL_ARRAY_BUFFER, text_buffer.VBO);
+                        for (int idx = 0; idx != line.size(); ++idx)
                         {
-                            int idx = character - 32; // magic ascii value described in font.hpp (we map the ascii range [32, .. , 32 +96])
-                            if (idx < 0) std::print("[error] character idx < 0. character: {}\n", character);
+                            char character = line[idx];
+
+                            int ascii_idx = character - 32; // magic ascii value described in font.hpp (we map the ascii range [32, .. , 32 +96])
+                            if (ascii_idx < 0) std::print("[error] character ascii_idx < 0. character: {}\n", character);
 
                             // get bounding box of this character?
-                            auto& character_info = atlas.character_info[idx];
-                             // unsigned short x0,y0,x1,y1; // coordinates of bbox in bitmap
-                             //   float xoff,yoff,xadvance;
-                             //   float xoff2,yoff2;
+                            auto& character_info = atlas.character_info[ascii_idx];
+                            // unsigned short x0,y0,x1,y1; // coordinates of bbox in bitmap
+                            //   float xoff,yoff,xadvance;
+                            //   float xoff2,yoff2;
+
+                            // cast the uv coordinates to float as a factor of its dimensions?
+                            vec2 uv_0 = vec2{
+                                static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
+                                static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
+                            vec2 uv_1 = vec2{
+                                static_cast<float>(character_info.x1) / static_cast<float>(atlas.width),
+                                static_cast<float>(character_info.y1) / static_cast<float>(atlas.height)};
+
+                            // update the uv mappings.
+                            // top left, bottom left, bottom right.
+                            // top left, bottom right, top right.
+                            std::array<vertex_xu, 6> text_character_vertices{};
+                            auto& v0 = text_character_vertices[0];
+                            auto& v1 = text_character_vertices[1];
+                            auto& v2 = text_character_vertices[2];
+                            auto& v3 = text_character_vertices[3];
+                            auto& v4 = text_character_vertices[4];
+                            auto& v5 = text_character_vertices[5];
+                            v0 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
+                            v1 = vertex_xu{.position = vec3{x_offset,                          static_cast<float>(start_y), 0.f}, .uv = uv_0};
+                            v2 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
+                            v3 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
+                            v4 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
+                            v5 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y) + atlas.font->line_height, 0.f}, .uv = uv_1};
+
+                            // move the cursor along to the width of the characters.
+                            x_offset = x_offset + character_info.xadvance;
+
+                            // where in the buffer are we ?
+                            int offset = idx * ( 6 * sizeof(vertex_xu));
+                            //@note: we should actually map the buffer instead of doing this. but it's whatever.
+                            glBufferSubData(GL_ARRAY_BUFFER, offset, text_character_vertices.size() * sizeof(vertex_xu), text_character_vertices.data());
                         }
+                        // ok, all the data has been replaced. now to draw using the vertex_xu shader.
+                        glActiveTexture(GL_TEXTURE0);
+
+                        draw_triangles(
+                            text_buffer.VAO,
+                            text_buffer.VBO,
+                            line.size() * 6, // vertex count 
+                            shader_program,
+                            projection_matrix,
+                            glm::mat4(1.0f), // identity view matrix.
+                            glm::mat4(1.0f), // identity transform,
+                            false);
+
                     };
 
                     // requires font_texture_atlas -> font, console.
@@ -606,20 +685,25 @@ int main(int argc, char *argv[])
                     }
                     int start_y = console_max.y;
 
+                    glm::mat4 ortographic_projection_matrix = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
                     // Render the history lines (this seems hilariously bad.)
-                    for (int idx = 0; idx < lines_to_render && history_size > 0; ++idx)
-                    {
-                        // Calculate the actual index to render from the ring buffer
-                        size_t index = (start_index + idx) % console.history.capacity();
+                    // for (int idx = 0; idx < lines_to_render && history_size > 0; ++idx)
+                    // {
+                    //     // Calculate the actual index to render from the ring buffer
+                    //     size_t index = (start_index + idx) % console.history.capacity();
                         
-                        std::string line;
-                        if (console.history.get(index, line))
-                        {
-                            // Calculate the current y position for rendering
-                            int current_y = start_y - idx * (line_height + spacing);
-                            draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y);
-                        }
-                    }
+                    //     std::string line;
+                    //     if (console.history.get(index, line))
+                    //     {
+                    //         // Calculate the current y position for rendering
+                    //         int current_y = start_y - idx * (line_height + spacing);
+                    //         draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y, text_character_gl_buffer, xu_shader_program, ortographic_projection_matrix);
+                    //     }
+                    // }
+
+                    std::string line = "hello world";
+                    draw_line(std::string_view{line}, font_texture_atlas, start_x, 200, text_character_gl_buffer, xu_shader_program, ortographic_projection_matrix);
+
 
 
                 // draw_console(console);

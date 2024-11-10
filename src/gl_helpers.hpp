@@ -206,7 +206,11 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     glUseProgram(program_id);
 
     // Set the uniform based on its type
-    if constexpr (std::is_same_v<Type, float>)
+    if constexpr (std::is_same_v<Type, int>)
+    {
+        glUniform1i(location, value);
+    }
+    else if constexpr (std::is_same_v<Type, float>)
     {
         glUniform1f(location, value);        
     }
@@ -654,33 +658,87 @@ inline uint32_t create_interleaved_xnc_shader_program()
 }
 
 
+// for later.
+struct Texture_Config
+{
+    bool generate_mipmaps;
+    bool use_anisotropic_filtering;
+};
 
+enum class Texture_Format {
+    Red,
+    RGB,
+    RGBA,
+    Depth,
+};
 
-struct Gl_Texture
+struct GL_Texture
 {
     uint32_t handle;
     uint32_t width;
     uint32_t height;
+    Texture_Format format;
+    uint32_t texture_unit; // the "window frame" thing. this needs to be communicated to the shader.
     // configuration? what attributes are active?
 };
 
-Gl_Texture create_texture(std::vector<uint8_t>& data, int width, int height)
+// no texture packing, just assign each texture its own activev texture (window frame).
+GL_Texture create_texture(Texture_Format format, std::vector<uint8_t>& data, int width, int height)
 {
-    // Upload the atlas to OpenGL
+    static int texture_unit_counter = 0;  // Static counter for texture units (glActiveTexture(GL_TEXTURE_0 + texture_unit_counter))
+
     GLuint texture;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data.data());
+    
+    GLenum gl_format;
+    GLenum gl_internal_format;
+
+    switch (format) {
+        case Texture_Format::Red:
+            gl_format = GL_RED;
+            gl_internal_format = GL_RED;
+            break;
+        case Texture_Format::RGB:
+            gl_format = GL_RGB;
+            gl_internal_format = GL_RGB8;
+            break;
+        case Texture_Format::RGBA:
+            gl_format = GL_RGBA;
+            gl_internal_format = GL_RGBA8;
+            break;
+        case Texture_Format::Depth:
+            gl_format = GL_DEPTH_COMPONENT;
+            gl_internal_format = GL_DEPTH_COMPONENT32;
+            break;
+        default:
+            gl_format = GL_RGBA;
+            gl_internal_format = GL_RGBA8;
+            break;
+    }
+
+    glTexImage2D(GL_TEXTURE_2D, 0, gl_internal_format, width, height, 0, gl_format, GL_UNSIGNED_BYTE, data.data());
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    // unbind texture?
-    // glBindTexture(GL_TEXTURE_2D, 0);
-    Gl_Texture gl_texture{};
+    glActiveTexture(GL_TEXTURE0 + texture_unit_counter);  // Activate the texture unit
+    glBindTexture(GL_TEXTURE_2D, texture);  // Bind the texture to the active texture unit
+    texture_unit_counter += 1;
+
+    assert(texture_unit_counter < 15 && "ran out of active textures.\n");
+
+
+    GL_Texture gl_texture{};
     gl_texture.handle = texture;
+    gl_texture.width = width;
+    gl_texture.height = height;
+    gl_texture.format = format;
+    gl_texture.texture_unit = texture_unit_counter;
+
+
 
     return gl_texture;
 }
