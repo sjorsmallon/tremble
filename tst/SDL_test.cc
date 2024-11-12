@@ -143,24 +143,26 @@ int main(int argc, char *argv[])
 
     // font stuff
     Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", 32);
-    const int font_atlas_width = 1024;
-    const int font_atlas_height = 1024;
+    const int font_atlas_width = 512;
+    const int font_atlas_height = 512;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
 
 
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
     constexpr auto max_character_count_in_string = 512;
     constexpr auto vertices_per_character = 6;
+
+    auto min = vec2{0.f, 0.f};
+    auto max = vec2{1.f, 1.f};
+    auto vertices = generate_vertex_xu_quad(min, max); 
     std::vector<vertex_xu> text_character_vertices(max_character_count_in_string * vertices_per_character);
+
     for (int idx = 0; idx != (max_character_count_in_string * vertices_per_character); idx += vertices_per_character)
     {
-        auto min = vec2{0.f, 0.f};
-        auto max = vec2{1.f, 1.f};
-
-        vertex_xu top_left     =  vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
-        vertex_xu top_right    =  vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
-        vertex_xu bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
-        vertex_xu bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
+        // vertex_xu top_left     =  vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
+        // vertex_xu top_right    =  vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
+        // vertex_xu bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
+        // vertex_xu bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
 
         auto& v0 = text_character_vertices[idx];
         auto& v1 = text_character_vertices[idx + 1];
@@ -169,21 +171,31 @@ int main(int argc, char *argv[])
         auto& v4 = text_character_vertices[idx + 4];
         auto& v5 = text_character_vertices[idx + 5];
 
-        v0 = top_left;
-        v1 = bottom_left;
-        v2 = bottom_right;
-        v3 = top_left;
-        v4 = bottom_right;
-        v5 = top_right;
+        v0 = vertices[0];
+        v1 = vertices[1];
+        v2 = vertices[2];
+        v3 = vertices[3];
+        v4 = vertices[4];
+        v5 = vertices[5];
     }
 
-    auto text_character_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
+    auto text_characters_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
 
     // shaders
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-    auto vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
-    auto fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
-    uint32_t xu_shader_program = create_shader_program(vertex_shader_string.c_str(), fragment_shader_string.c_str());
+    
+    auto xu_vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
+    auto xu_fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
+    uint32_t xu_shader_program = create_shader_program(xu_vertex_shader_string.c_str(), xu_fragment_shader_string.c_str());
+
+    auto x_vertex_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.vert");
+    auto x_fragment_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.frag");
+    uint32_t x_shader_program = create_shader_program(x_vertex_shader_string.c_str(), x_fragment_shader_string.c_str());
+
+
+
+
+
 
     // create a gl texture.
     GL_Texture font_bitmap_texture = create_texture(
@@ -220,14 +232,14 @@ int main(int argc, char *argv[])
     // console geometry
     auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
     auto console_max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
-    auto console_background_vertices = generate_vertex_xu_quad(console_min, console_max);
+    auto console_background_vertices = generate_vertex_x_quad(console_min, console_max);
     auto bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
     auto bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
     auto text_entry_bar_vertices = generate_vertex_xu_quad(bar_min, bar_max);
 
     // I don't care.
-    auto all_console_vertices = concatenate(console_background_vertices, text_entry_bar_vertices);
-    auto console_gl_buffer = create_interleaved_xu_buffer(all_console_vertices);
+    auto console_background_gl_buffer = create_x_buffer(console_background_vertices);
+    auto text_entry_bar_gl_buffer = create_interleaved_xu_buffer(text_entry_bar_vertices);
 
     // game loop state
     bool running = true;
@@ -576,12 +588,15 @@ int main(int argc, char *argv[])
                 float min_z = -1.0f;
                 float max_z = 1.0f;
                 glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
-                // set_uniform(xu_shader_program, "color", vec3{7.0f/255.f, 38.0f/255.f, 38.0f/255.f});
+                // set_uniform(xu_shader_program, "color", );
+                // draw background
+                set_uniform(x_shader_program, "color", vec4{7.0f/255.f, 38.0f/255.f, 38.0f/255.f, .5f});
+
                 draw_triangles(
-                    console_gl_buffer.VAO,
-                    console_gl_buffer.VBO,
-                    console_gl_buffer.vertex_count,
-                    xu_shader_program,
+                    console_background_gl_buffer.VAO,
+                    console_background_gl_buffer.VBO,
+                    console_background_gl_buffer.vertex_count,
+                    x_shader_program,
                     projection,
                     glm::mat4(1.0f), // identity view matrix.
                     glm::mat4(1.0f), // identity transformation matrix.
@@ -602,6 +617,7 @@ int main(int argc, char *argv[])
                         assert(line.size() < max_characters);
                         
                         float x_offset = start_x;
+                        float y_offset = start_y;
                        
                         // make the vbo active
                         glBindBuffer(GL_ARRAY_BUFFER, text_buffer.VBO);
@@ -613,25 +629,20 @@ int main(int argc, char *argv[])
                             if (ascii_idx < 0) std::print("[error] character ascii_idx < 0. character: {}\n", character);
 
                             // get bounding box of this character?
-                            auto& character_info = atlas.character_info[ascii_idx];
-                            // unsigned short x0,y0,x1,y1; // coordinates of bbox in bitmap
-                            //   float xoff,yoff,xadvance;
-                            //   float xoff2,yoff2;
+                            stbtt_packedchar& character_info = atlas.character_info[ascii_idx];
+                            vec2 position_screen_pixel_space{};
+                            stbtt_aligned_quad quad{}; 
+                            // float x0,y0,s0,t0; // top-left
+                            // float x1,y1,s1,t1; // bottom-right
 
-                            // cast the uv coordinates to float as a factor of its dimensions?
-                            // vec2 uv_0 = vec2{
-                            //     static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
-                            //     static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
-                            // vec2 uv_1 = vec2{
-                            //     static_cast<float>(character_info.x1) / static_cast<float>(atlas.width),
-                            //     static_cast<float>(character_info.y1) / static_cast<float>(atlas.height)};
-
-                            vec2 uv_1 = vec2{
-                                static_cast<float>(character_info.x1) / static_cast<float>(atlas.width),
-                                static_cast<float>(character_info.y0) / static_cast<float>(atlas.height)};
-                            vec2 uv_0 = vec2{
-                                static_cast<float>(character_info.x0) / static_cast<float>(atlas.width),
-                                static_cast<float>(character_info.y1) / static_cast<float>(atlas.height)};
+                            stbtt_GetPackedQuad(
+                                atlas.character_info,
+                                atlas.width,
+                                atlas.height,  // same data as above
+                                static_cast<int>(character) - 32,             // character to display
+                               &x_offset, &y_offset,   // pointers to current position in screen pixel space
+                               &quad,      // output: quad to draw
+                               0);
 
                             // update the uv mappings.
                             // top left, bottom left, bottom right.
@@ -643,15 +654,22 @@ int main(int argc, char *argv[])
                             auto& v3 = text_character_vertices[3];
                             auto& v4 = text_character_vertices[4];
                             auto& v5 = text_character_vertices[5];
-                            v0 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
-                            v1 = vertex_xu{.position = vec3{x_offset,                          static_cast<float>(start_y), 0.f}, .uv = uv_0};
-                            v2 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
-                            v3 = vertex_xu{.position = vec3{x_offset, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = vec2{uv_0.u, uv_1.v}};
-                            v4 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y), 0.f}, .uv = vec2{uv_1.u, uv_0.v}};
-                            v5 = vertex_xu{.position = vec3{x_offset + character_info.xadvance, static_cast<float>(start_y) + static_cast<float>(fabs(character_info.y1 - character_info.y0)), 0.f}, .uv = uv_1};
 
-                            // move the cursor along to the width of the characters.
-                            x_offset = x_offset + character_info.xadvance;
+                            // std::print("fabs(x1 - x0): {}", );
+                            float character_width = fabs(static_cast<float>(character_info.x1) - static_cast<float>(character_info.x0));
+                            // float character_width = character_info.xadvance;
+                            
+                            // the characters are "mirrored" in the y direction. can we flip them?
+
+                            v0 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t0}};
+                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t1}};
+                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t1}};
+                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t0}};
+                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t1}};
+                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t0}};
+
+                            // move the cursor along to the width of the characters. 
+                            // x_offset = x_offset + character_info.xadvance;
 
                             // where in the buffer are we ?
                             int offset = idx * ( 6 * sizeof(vertex_xu));
@@ -692,7 +710,7 @@ int main(int argc, char *argv[])
                     }
                     int start_y = console_max.y;
 
-                    glm::mat4 ortographic_projection_matrix = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
+                    glm::mat4 ortographic_projection_matrix = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height),  min_z, max_z);
                     // Render the history lines (this seems hilariously bad.)
                     // for (int idx = 0; idx < lines_to_render && history_size > 0; ++idx)
                     // {
@@ -704,12 +722,18 @@ int main(int argc, char *argv[])
                     //     {
                     //         // Calculate the current y position for rendering
                     //         int current_y = start_y - idx * (line_height + spacing);
-                    //         draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y, text_character_gl_buffer, xu_shader_program, ortographic_projection_matrix);
+                    //         draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y, text_characters_gl_buffer, xu_shader_program, ortographic_projection_matrix);
                     //     }
                     // }
 
-                    std::string line = "hello world";
-                    draw_line(std::string_view{line}, font_texture_atlas, start_x, 200, text_character_gl_buffer, xu_shader_program, ortographic_projection_matrix);
+                    std::string line = "hello";
+                    draw_line(
+                        std::string_view{line},
+                        font_texture_atlas,
+                        start_x,
+                        200,
+                        text_characters_gl_buffer,
+                        xu_shader_program, ortographic_projection_matrix);
 
 
 

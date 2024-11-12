@@ -89,7 +89,11 @@ inline void set_global_gl_settings()
         glDebugMessageCallback(opengl_message_callback, 0);
 
         // DISABLE transparency
-        glDisable(GL_BLEND);
+        // glDisable(GL_BLEND);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDisable(GL_FRAMEBUFFER_SRGB);
@@ -224,7 +228,7 @@ inline void set_uniform(GLuint program_id, const std::string_view name, const Ty
     }
     else if constexpr (std::is_same_v<Type, vec4>)
     {
-        glUniform4fv(location, 1, &value);
+        glUniform4fv(location, 1, (float*)&value);
     } else if constexpr (std::is_same_v<Type, glm::mat4>)
     {
         glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(value));
@@ -274,7 +278,7 @@ struct GL_Buffer
 // FIXME: actually, I like that we had a vector of float instead of vector of xnc. can we still fix this?
 // in the future. maybe.
 
-GL_Buffer create_x_buffer(const std::vector<vec3>& values)
+GL_Buffer create_x_buffer(const std::vector<vertex_x>& values)
 {
     GL_Buffer gl_buffer{};
 
@@ -467,6 +471,27 @@ std::vector<vertex_xu> generate_vertex_xu_quad(const vec2& min, const vec2& max)
 
     return vertices;
 }
+
+// we are ignoring z because this is intended to be used for pixel coordinates. 
+std::vector<vertex_x> generate_vertex_x_quad(const vec2& min, const vec2& max)
+{
+    vertex_x top_left     =  vertex_x{.position = vec3{.x = min.x, .y = max.y, .z =  0}};
+    vertex_x top_right    =  vertex_x{.position = vec3{.x = max.x, .y = max.y, .z =  0}};
+    vertex_x bottom_left  =  vertex_x{.position = vec3{.x = min.x, .y = min.y, .z =  0}};
+    vertex_x bottom_right =  vertex_x{.position = vec3{.x = max.x, .y = min.y, .z =  0}};
+
+    auto vertices = std::vector<vertex_x>{
+        top_left,
+        bottom_left,
+        bottom_right,
+        top_left,
+        bottom_right,
+        top_right
+    };
+
+    return vertices;
+}
+
 
 
 // we're at the point where maybe we should generalize this. is it possible to do this at compile time? by looking at the types?

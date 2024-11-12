@@ -52,6 +52,7 @@ Font create_font_at_size(std::string_view path, int font_height)
 
     /* calculate font scaling */
     float scale = stbtt_ScaleForPixelHeight(&font_info, line_height);
+    std::print("scale: {}\n", scale);
     int ascent, descent, line_gap;
     stbtt_GetFontVMetrics(&font_info, &ascent, &descent, &line_gap);
     
@@ -101,5 +102,6 @@ inline Font_Texture_Atlas create_font_texture_atlas(Font& font, int width, int h
 
 	return atlas;
 }
+
 
 

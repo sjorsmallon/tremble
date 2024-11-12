@@ -40,4 +40,18 @@ struct std::formatter<vertex_xu> : std::formatter<std::string> {
     }
 };
 
+struct vertex_x
+{
+    vec3 position;
+};
+
+template <>
+struct std::formatter<vertex_x> : std::formatter<std::string> {
+    // Format the vertex_x as a string
+    auto format(const vertex_x& vertex, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "position: {}", vertex.position);
+    }
+};
+
+static_assert(sizeof(vertex_x) == sizeof(vec3) && sizeof(vertex_x) == 3 * sizeof(float));
 
