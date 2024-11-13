@@ -659,14 +659,23 @@ int main(int argc, char *argv[])
                             float character_width = fabs(static_cast<float>(character_info.x1) - static_cast<float>(character_info.x0));
                             // float character_width = character_info.xadvance;
                             
-                            // the characters are "mirrored" in the y direction. can we flip them?
+                            // // swap them?
+                            if (quad.y0 > quad.y1) std::swap(quad.y0, quad.y1);
 
-                            v0 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t0}};
-                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t1}};
-                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t1}};
-                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t0}};
-                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t1}};
-                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t0}};
+                            // what's the delta between y0 and the y line?
+                            float y0_delta = fabs(quad.y0 - y_offset);
+                            // add y0 delta to both y0 and y1
+                            quad.y0 += y0_delta;
+                            quad.y1 += y0_delta;
+
+                            // top left, bot left, bot right
+                            // top left,  bot right, top right
+                            v0 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t0}};
+                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t1}};
+                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t1}};
+                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t0}};
+                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t1}};
+                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t0}};
 
                             // move the cursor along to the width of the characters. 
                             // x_offset = x_offset + character_info.xadvance;
@@ -726,7 +735,7 @@ int main(int argc, char *argv[])
                     //     }
                     // }
 
-                    std::string line = "hello";
+                    std::string line = "hello world!";
                     draw_line(
                         std::string_view{line},
                         font_texture_atlas,
