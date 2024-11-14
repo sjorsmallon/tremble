@@ -25,6 +25,37 @@
 #include "../src/font.hpp"
 #include "../src/console.hpp"
 
+// yuck
+char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
+    // Map of SDL3 keycodes to characters (letters, numbers, and symbols)
+    static const std::unordered_map<SDL_Keycode, std::string> key_map = {
+        { SDLK_A, "aA" }, { SDLK_B, "bB" }, { SDLK_C, "cC" }, { SDLK_D, "dD" },
+        { SDLK_E, "eE" }, { SDLK_F, "fF" }, { SDLK_G, "gG" }, { SDLK_H, "hH" },
+        { SDLK_I, "iI" }, { SDLK_J, "jJ" }, { SDLK_K, "kK" }, { SDLK_L, "lL" },
+        { SDLK_M, "mM" }, { SDLK_N, "nN" }, { SDLK_O, "oO" }, { SDLK_P, "pP" },
+        { SDLK_Q, "qQ" }, { SDLK_R, "rR" }, { SDLK_S, "sS" }, { SDLK_T, "tT" },
+        { SDLK_U, "uU" }, { SDLK_V, "vV" }, { SDLK_W, "wW" }, { SDLK_X, "xX" },
+        { SDLK_Y, "yY" }, { SDLK_Z, "zZ" },
+        { SDLK_0, "0)" }, { SDLK_1, "1!" }, { SDLK_2, "2@" }, { SDLK_3, "3#" },
+        { SDLK_4, "4$" }, { SDLK_5, "5%" }, { SDLK_6, "6^" }, { SDLK_7, "7&" },
+        { SDLK_8, "8*" }, { SDLK_9, "9(" },
+        { SDLK_SPACE, " " }, { SDLK_RETURN, "\n" }, { SDLK_TAB, "\t" },
+        { SDLK_COMMA, ",<" }, { SDLK_PERIOD, ".>" }, { SDLK_SLASH, "/?" },
+        { SDLK_SEMICOLON, ";:" }, { SDLK_APOSTROPHE, "'\"" }, { SDLK_LEFTBRACKET, "[{" },
+        { SDLK_RIGHTBRACKET, "]}" }, { SDLK_BACKSLASH, "\\|" }, { SDLK_MINUS, "-_" },
+        { SDLK_EQUALS, "=+" }
+    };
+
+    // Lookup the key in the map
+    auto it = key_map.find(keycode);
+    if (it != key_map.end()) {
+        return shift_pressed ? it->second[1] : it->second[0];
+    }
+
+    // Handle unsupported keys by returning 0
+    return 0;
+}
+
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
@@ -193,10 +224,6 @@ int main(int argc, char *argv[])
     uint32_t x_shader_program = create_shader_program(x_vertex_shader_string.c_str(), x_fragment_shader_string.c_str());
 
 
-
-
-
-
     // create a gl texture.
     GL_Texture font_bitmap_texture = create_texture(
         Texture_Format::Red, //u8
@@ -233,9 +260,9 @@ int main(int argc, char *argv[])
     auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
     auto console_max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
     auto console_background_vertices = generate_vertex_x_quad(console_min, console_max);
-    auto bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
-    auto bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
-    auto text_entry_bar_vertices = generate_vertex_xu_quad(bar_min, bar_max);
+    auto text_entry_bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
+    auto text_entry_bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
+    auto text_entry_bar_vertices = generate_vertex_xu_quad(text_entry_bar_min, text_entry_bar_max);
 
     // I don't care.
     auto console_background_gl_buffer = create_x_buffer(console_background_vertices);
@@ -307,7 +334,23 @@ int main(int argc, char *argv[])
                 {   
                     showing_console = !showing_console;
                 }
+
+
             }
+            if (event.type == SDL_EVENT_KEY_DOWN)
+            {
+                if (showing_console)
+                {   
+
+                    bool shift_pressed = (SDL_GetModState() & SDL_KMOD_SHIFT);
+                    char key = SDL_Keycode_to_char(event.key.key, shift_pressed);
+
+                    if (event.key.key == SDLK_BACKSPACE) key = '\b';
+
+                    if (key != 0) handle_keystroke(console, key); 
+                }
+            }
+
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
             {
@@ -592,10 +635,23 @@ int main(int argc, char *argv[])
                 // draw background
                 set_uniform(x_shader_program, "color", vec4{7.0f/255.f, 38.0f/255.f, 38.0f/255.f, .5f});
 
+                // console background
                 draw_triangles(
                     console_background_gl_buffer.VAO,
                     console_background_gl_buffer.VBO,
                     console_background_gl_buffer.vertex_count,
+                    x_shader_program,
+                    projection,
+                    glm::mat4(1.0f), // identity view matrix.
+                    glm::mat4(1.0f), // identity transformation matrix.
+                    false
+                    );
+
+                // text entry bar.
+                draw_triangles(
+                    text_entry_bar_gl_buffer.VAO,
+                    text_entry_bar_gl_buffer.VBO,
+                    text_entry_bar_gl_buffer.vertex_count,
                     x_shader_program,
                     projection,
                     glm::mat4(1.0f), // identity view matrix.
@@ -621,7 +677,10 @@ int main(int argc, char *argv[])
                        
                         // make the vbo active
                         glBindBuffer(GL_ARRAY_BUFFER, text_buffer.VBO);
-                        for (int idx = 0; idx != line.size(); ++idx)
+                        //FIXME: this is not nice. but I do not want to fumble with a new data type now. this just counts until we hit the first '\0'.
+                        auto characters_to_render = std::strlen(line.data());
+
+                        for (int idx = 0; idx != characters_to_render; ++idx)
                         {
                             char character = line[idx];
 
@@ -670,12 +729,13 @@ int main(int argc, char *argv[])
 
                             // top left, bot left, bot right
                             // top left,  bot right, top right
-                            v0 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t0}};
-                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.f}, .uv = vec2{quad.s0, quad.t1}};
-                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t1}};
-                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.f}, .uv = vec2{quad.s0, quad.t0}};
-                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.f}, .uv = vec2{quad.s1, quad.t1}};
-                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.f}, .uv = vec2{quad.s1, quad.t0}};
+                            // since text is on top, give it a z value 0.1f (+z is closer to the camera)
+                            v0 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
+                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.1f}, .uv = vec2{quad.s0, quad.t1}};
+                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
+                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
+                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
+                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.1f}, .uv = vec2{quad.s1, quad.t0}};
 
                             // move the cursor along to the width of the characters. 
                             // x_offset = x_offset + character_info.xadvance;
@@ -707,46 +767,50 @@ int main(int argc, char *argv[])
                     auto start_x = 10; 
                     auto console_height = fabs(console_max.y - console_min.y);
                     // render as many history lines as we can fit.
-                    const int lines_to_render = console_height / (line_height + spacing); // character_height?
-                    // start at the top, render to the bottom.
+                    const size_t max_lines_to_render = console_height / (line_height + spacing); // character_height?
 
-                    size_t history_size = console.history.size();
-                    size_t start_index = (console.history.full() ? console.history.capacity() : history_size) - lines_to_render;
-
-                    if (start_index < 0)
-                    {
-                        start_index += console.history.capacity();
-                    }
-                    int start_y = console_max.y;
-
+                    int start_y = console_min.y;
                     glm::mat4 ortographic_projection_matrix = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height),  min_z, max_z);
-                    // Render the history lines (this seems hilariously bad.)
-                    // for (int idx = 0; idx < lines_to_render && history_size > 0; ++idx)
-                    // {
-                    //     // Calculate the actual index to render from the ring buffer
-                    //     size_t index = (start_index + idx) % console.history.capacity();
-                        
-                    //     std::string line;
-                    //     if (console.history.get(index, line))
-                    //     {
-                    //         // Calculate the current y position for rendering
-                    //         int current_y = start_y - idx * (line_height + spacing);
-                    //         draw_line(std::string_view{line}, font_texture_atlas, start_x, current_y, text_characters_gl_buffer, xu_shader_program, ortographic_projection_matrix);
-                    //     }
-                    // }
+                    //Render the history lines (this seems hilariously bad.)
+                    auto history_size = console.history.size(); // this is not constant: this is the occupied count.
+                    auto latest_entry_idx = console.history.index_of_latest_entry();
 
-                    std::string line = "hello world!";
+                    // Determine the number of lines to render (either `history_size` or `max_lines_to_render`, whichever is smaller)
+                    int number_of_lines_to_render = std::min(history_size, max_lines_to_render);
+                    for (int line_idx = 0; line_idx != number_of_lines_to_render; ++line_idx)
+                    {
+                        size_t render_idx = console.history.wrap_index(latest_entry_idx - line_idx);
+
+                        // what is the newest index? render bottom to top.
+                        // that's back, right?
+                        std::string line;
+                        if (console.history.get(render_idx, line))
+                        {
+                            int current_y = start_y + line_idx * (line_height + spacing);
+                            // Calculate the current y position for rendering
+                             draw_line(
+                            std::string_view{line},
+                            font_texture_atlas,
+                            start_x,
+                            current_y,
+                            text_characters_gl_buffer,
+                            xu_shader_program, ortographic_projection_matrix);
+                        }
+
+
+
+                    }
+                    int text_entry_y = text_entry_bar_min.y;
+                    // draw the input text
                     draw_line(
-                        std::string_view{line},
+                        std::string_view{console.input_buffer},
                         font_texture_atlas,
                         start_x,
-                        200,
+                        text_entry_y,
                         text_characters_gl_buffer,
                         xu_shader_program, ortographic_projection_matrix);
 
 
-
-                // draw_console(console);
             }
 
         }

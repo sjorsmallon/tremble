@@ -80,16 +80,28 @@ public:
 
     // Get an item at a specific index without removing it
     bool get(size_t index, T& item) const {
-        if (index >= m_size) {
+        if (index >= m_size)
+        {
             return false; // Out of bounds
         }
-        item = m_buffer[(m_head + index) % m_capacity];
+        item = m_buffer[index];
         return true; // Successfully retrieved the item
     }
 
     // Method to get the latest added item by reference (back of the buffer)
     T& back() {
         return m_buffer[(m_head + m_capacity - 1) % m_capacity]; // Return a reference to the last item added
+    }
+
+    size_t index_of_latest_entry()
+    {
+        return (m_head + m_capacity - 1) % m_capacity;
+    }
+
+
+    size_t wrap_index(size_t index) const
+    {
+        return (index + m_capacity) % m_capacity;
     }
 
     // Const version for read-only access
