@@ -1,6 +1,7 @@
 #pragma once 
 #include <vector>
 #include <type_traits>
+#include <unordered_set>
 
 template <typename Type>
 concept is_non_zero = (sizeof(Type) > 0);
@@ -43,6 +44,21 @@ std::vector<T> concatenate(const std::vector<T>& vec1, const std::vector<T>& vec
 
     return result;
 }
+
+template <typename Type>
+std::vector<Type> filter_duplicates(const std::vector<Type>& vec)
+{
+    std::unordered_set<Type> seen;
+    std::vector<Type> unique_elements;
+
+    for (size_t value : vec) {
+        if (seen.find(value) == seen.end()) {
+            seen.insert(value); 
+            unique_elements.push_back(value);
+        }
+    }
+    return unique_elements;
+};
 
 
 

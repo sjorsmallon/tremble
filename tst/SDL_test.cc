@@ -209,10 +209,11 @@ int main(int argc, char *argv[])
         font_texture_atlas.width,
         font_texture_atlas.height
         );
+
+
     //@note: please don't forget to bind the texture you fool..
     glActiveTexture(GL_TEXTURE0 + font_bitmap_texture.texture_unit);
     set_uniform(xu_shader_program,"text_bitmap", 0);
-
 
     // base geometry
     auto path = std::string{"../data/just_a_floor_AABBs"};
@@ -301,8 +302,6 @@ int main(int argc, char *argv[])
                 {   
                     showing_console = !showing_console;
                 }
-
-
             }
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
@@ -379,25 +378,8 @@ int main(int argc, char *argv[])
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
                 auto all_face_indices = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
 
-                //@Note: there are duplicates. because we do not split faces upon bsp construction.
-                // that means we need to filter them out somewhere. I do that here. This is kind of annoying.
-                // we should think of something better.
-                auto filter_duplicates = [](const std::vector<size_t>& vec)
-                {
-                    std::unordered_set<size_t> seen;
-                    std::vector<size_t> unique_elements;
-
-                    for (size_t value : vec) {
-                        if (seen.find(value) == seen.end()) {
-                            seen.insert(value); 
-                            unique_elements.push_back(value);
-                        }
-                    }
-                    return unique_elements;
-                };
-
                 all_face_indices = filter_duplicates(all_face_indices);
-  
+                
                 for (auto& face_idx: all_face_indices)
                 {   
                     auto &v0 = aabbs_vertices[face_idx].position;
