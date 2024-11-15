@@ -7,6 +7,7 @@
 #include <cfloat> // FLT_MAX
 #include <cmath>
 #include <functional>
+#include <numeric> // iota..
 
 
 // move to math 
@@ -171,88 +172,91 @@ float point_to_triangle_distance(const vec3& p, const vec3& v0, const vec3& v1, 
 //@Memory: we never free this
 //@Speed: Quadratic behavior! for all planes, for all other planes. or is it log?
 // global_buffer is not const since it can be the case we add faces based on a STRADDLING face.
-BSP* build_bsp(std::vector<uint64_t>& face_indices, std::vector<vertex_xnc>& all_faces_buffer)
+BSP* build_bsp(std::vector<vertex_xnc>& vertices)
 {
-
-	if (face_indices.empty())
-	{
-		return nullptr; // No faces to partition
+    // Construct the initial list of face indices
+    assert(vertices.size() % 3 == 0);
+    std::vector<uint64_t> face_indices(vertices.size() / 3);
+    auto index_of_start_of_face_in_vertices = 0;
+    for(auto& face_idx: face_indices)
+    {   
+        face_idx = index_of_start_of_face_in_vertices;
+        index_of_start_of_face_in_vertices += 3;
     }
 
-	//@Memory: yikes
-	BSP* bsp = new BSP{};
+    // Recursive lambda for building the BSP tree
+    std::function<BSP*(const std::vector<uint64_t>&)> build_bsp_recursive = 
+    [&](const std::vector<uint64_t>& indices) -> BSP* {
+        if (indices.empty()) {
+            return nullptr; // No faces to partition
+        }
 
-	// base case: I have no idea yet. (why is the best_cadndiate unused? because it is just set automatically?)
-	// uint64_t best_candidate = -1; 
-	std::vector<uint64_t> best_front_indices{};
-	std::vector<uint64_t> best_back_indices{};
-	bool initial = true;
+        BSP* bsp = new BSP{};
 
-	for (auto candidate_idx: face_indices)
-	{
-		std::vector<uint64_t> front_indices;
-		std::vector<uint64_t> back_indices;
+        std::vector<uint64_t> best_front_indices;
+        std::vector<uint64_t> best_back_indices;
+        bool initial = true;
 
-		// this can be a function but whatever
-		vec3& v0 = all_faces_buffer[candidate_idx].position;
-		vec3& v1 = all_faces_buffer[candidate_idx + 1].position;
-		vec3& v2 = all_faces_buffer[candidate_idx + 2].position;
+        for (uint64_t candidate_idx : indices) {
+            std::vector<uint64_t> front_indices;
+            std::vector<uint64_t> back_indices;
 
-		Plane plane = to_plane(v0, v1, v2);
+            // Extract candidate face vertices
+            vec3& v0 = vertices[candidate_idx].position;
+            vec3& v1 = vertices[candidate_idx + 1].position;
+            vec3& v2 = vertices[candidate_idx + 2].position;
 
-		for (auto other_idx: face_indices)
-		{
-			// skip myself
-			if (other_idx == candidate_idx) continue;
+            Plane plane = to_plane(v0, v1, v2);
 
-			vec3& other_v0 = all_faces_buffer[other_idx].position;
-			vec3& other_v1 = all_faces_buffer[other_idx + 1].position;
-			vec3& other_v2 = all_faces_buffer[other_idx + 2].position;
+            // Partition other faces
+            for (uint64_t other_idx : indices) {
+                if (other_idx == candidate_idx) continue;
 
-			Partition_Result partition_result = get_partition_result(plane, other_v0, other_v1, other_v2);
+                vec3& other_v0 = vertices[other_idx].position;
+                vec3& other_v1 = vertices[other_idx + 1].position;
+                vec3& other_v2 = vertices[other_idx + 2].position;
 
-			if (partition_result == Partition_Result::FRONT)
-			{
-				front_indices.push_back(other_idx);
-			}
-			if (partition_result == Partition_Result::BACK)
-			{
-				back_indices.push_back(other_idx);
-			}
+                Partition_Result partition_result = get_partition_result(plane, other_v0, other_v1, other_v2);
 
-			if (partition_result == Partition_Result::STRADDLING) // we should actually split I think ->FIXME: YES WE SHOULD! this causes double indices to appear in collision detection.
-			{
-				front_indices.push_back(other_idx);
-				back_indices.push_back(other_idx);
-			}
-		}
+                if (partition_result == Partition_Result::FRONT) {
+                    front_indices.push_back(other_idx);
+                }
+                if (partition_result == Partition_Result::BACK) {
+                    back_indices.push_back(other_idx);
+                }
+                if (partition_result == Partition_Result::STRADDLING) {
+                    front_indices.push_back(other_idx);
+                    back_indices.push_back(other_idx);
+                }
+            }
 
-		// this is awful but whatever.
-		if (initial) 
-		{
-			best_front_indices = std::move(front_indices);
-			best_back_indices = std::move(back_indices);
-			bsp->face_idx = candidate_idx;
-			initial = false;
-		}
-		else
-		{
-			size_t absolute_delta = abs(front_indices.size(), back_indices.size());
-			// smaller delta means more balanced tree.
-			if (absolute_delta < abs(best_front_indices.size(), best_back_indices.size()))
-			{
-				best_front_indices = std::move(front_indices);
-				best_back_indices = std::move(back_indices);
-				bsp->face_idx = candidate_idx;
-			}
-		}
+            if (initial)
+            {
+                best_front_indices = std::move(front_indices);
+                best_back_indices = std::move(back_indices);
+                bsp->face_idx = candidate_idx;
+                initial = false;
+            } else
+            {
+                size_t absolute_delta = abs(static_cast<int64_t>(front_indices.size() - back_indices.size()));
+                if (absolute_delta < abs(static_cast<int64_t>(best_front_indices.size() - best_back_indices.size())))
+                {
+                    best_front_indices = std::move(front_indices);
+                    best_back_indices = std::move(back_indices);
+                    bsp->face_idx = candidate_idx;
+                }
+            }
+        }
 
-	}
+        bsp->front = build_bsp_recursive(best_front_indices);
+        bsp->back = build_bsp_recursive(best_back_indices);
 
-	bsp->front = build_bsp(best_front_indices, all_faces_buffer);
-	bsp->back = build_bsp(best_back_indices, all_faces_buffer);
+        return bsp;
+    };
 
-	return bsp;
+
+	// Start the recursion with the full set of indices
+    return build_bsp_recursive(face_indices);
 }
 
 

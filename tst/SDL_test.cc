@@ -173,7 +173,8 @@ int main(int argc, char *argv[])
     }    
 
     // font stuff
-    Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", 32);
+    auto font_size = 22.f;
+    Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", font_size);
     const int font_atlas_width = 512;
     const int font_atlas_height = 512;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
@@ -187,29 +188,6 @@ int main(int argc, char *argv[])
     auto max = vec2{1.f, 1.f};
     auto vertices = generate_vertex_xu_quad(min, max); 
     std::vector<vertex_xu> text_character_vertices(max_character_count_in_string * vertices_per_character);
-
-    for (int idx = 0; idx != (max_character_count_in_string * vertices_per_character); idx += vertices_per_character)
-    {
-        // vertex_xu top_left     =  vertex_xu{.position = vec3{.x = min.x, .y = max.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 1.f}};
-        // vertex_xu top_right    =  vertex_xu{.position = vec3{.x = max.x, .y = max.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 1.f}};
-        // vertex_xu bottom_left  =  vertex_xu{.position = vec3{.x = min.x, .y = min.y, .z =  0}, .uv = vec2{.u = 0.f, .v = 0.f}};
-        // vertex_xu bottom_right =  vertex_xu{.position = vec3{.x = max.x, .y = min.y, .z =  0}, .uv = vec2{.u = 1.f, .v = 0.f}};
-
-        auto& v0 = text_character_vertices[idx];
-        auto& v1 = text_character_vertices[idx + 1];
-        auto& v2 = text_character_vertices[idx + 2];
-        auto& v3 = text_character_vertices[idx + 3];
-        auto& v4 = text_character_vertices[idx + 4];
-        auto& v5 = text_character_vertices[idx + 5];
-
-        v0 = vertices[0];
-        v1 = vertices[1];
-        v2 = vertices[2];
-        v3 = vertices[3];
-        v4 = vertices[4];
-        v5 = vertices[5];
-    }
-
     auto text_characters_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
 
     // shaders
@@ -237,31 +215,20 @@ int main(int argc, char *argv[])
 
 
     // base geometry
-    auto path = std::string{"../data/texture_test"};
+    auto path = std::string{"../data/just_a_floor_AABBs"};
     auto aabbs = read_AABBs_from_file(path);
     auto aabbs_vertices  = to_vertex_xnc(aabbs);
     // i do not trust auto assignment.
     std::vector<vertex_xnc> base_aabbs_vertices = aabbs_vertices;
     auto aabb_gl_buffer = create_interleaved_xnc_buffer(aabbs_vertices);
-    BSP* bsp = nullptr;
-    {
-        std::vector<uint64_t> face_indices{};
-        int face_idx = 0;
-        while (face_idx < aabbs_vertices.size())
-        {
-            face_indices.push_back(face_idx);
-            face_idx += 3;
-        }
-
-        bsp = build_bsp(face_indices, aabbs_vertices);
-    }
+    BSP* bsp = build_bsp(aabbs_vertices);
 
     // console geometry
     auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
     auto console_max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
     auto console_background_vertices = generate_vertex_x_quad(console_min, console_max);
-    auto text_entry_bar_min = vec2{.x = 0.f, .y = 0.4f * static_cast<float>(window_height)};
-    auto text_entry_bar_max =vec2{.x = static_cast<float>(window_width), .y = 0.5f * static_cast<float>(window_height)};
+    auto text_entry_bar_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height) - 2 * font_size};
+    auto text_entry_bar_max =vec2{.x = static_cast<float>(window_width), .y = text_entry_bar_min.y +  2 *font_size};
     auto text_entry_bar_vertices = generate_vertex_xu_quad(text_entry_bar_min, text_entry_bar_max);
 
     // I don't care.
@@ -647,6 +614,7 @@ int main(int argc, char *argv[])
                     false
                     );
 
+                set_uniform(x_shader_program, "color", vec4{27.0f/255.f, 27.0f/255.f, 27.0f/255.f, .8f});
                 // text entry bar.
                 draw_triangles(
                     text_entry_bar_gl_buffer.VAO,
@@ -718,24 +686,61 @@ int main(int argc, char *argv[])
                             float character_width = fabs(static_cast<float>(character_info.x1) - static_cast<float>(character_info.x0));
                             // float character_width = character_info.xadvance;
                             
-                            // // swap them?
-                            if (quad.y0 > quad.y1) std::swap(quad.y0, quad.y1);
+                            bool flip = true;
+                            if (flip)
+                            {
+                                  // // swap them?
+                                if (quad.y0 > quad.y1) std::swap(quad.y0, quad.y1);
 
-                            // what's the delta between y0 and the y line?
-                            float y0_delta = fabs(quad.y0 - y_offset);
-                            // add y0 delta to both y0 and y1
-                            quad.y0 += y0_delta;
-                            quad.y1 += y0_delta;
+                                // what's the delta between y0 and the y line?
+                                float y0_delta = fabs(quad.y0 - y_offset);
 
-                            // top left, bot left, bot right
-                            // top left,  bot right, top right
-                            // since text is on top, give it a z value 0.1f (+z is closer to the camera)
-                            v0 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
-                            v1 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.1f}, .uv = vec2{quad.s0, quad.t1}};
-                            v2 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
-                            v3 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
-                            v4 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
-                            v5 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.1f}, .uv = vec2{quad.s1, quad.t0}};
+                                // what's the delta between y1 and the y line?
+                                float y1_delta = fabs(quad.y1 - y_offset);
+
+                                if (quad.y1 > y_offset && quad.y0 < y_offset)
+                                {
+                                    quad.y1 = quad.y1 + fabs(y0_delta - y1_delta);
+                                    quad.y0 = quad.y0 + fabs(y0_delta - y1_delta);
+                                }
+                                else
+                                {
+                                   // add y0 delta to both y0 and y1
+                                    quad.y0 += y0_delta;
+                                    quad.y1 += y0_delta;
+                                }
+
+                                // top left, bot left, bot right
+                                // top left,  bot right, top right
+                                // since text is on top, give it a z value 0.1f (+z is closer to the camera)
+                                v0 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
+                                v1 = vertex_xu{.position = vec3{quad.x0, quad.y0, 0.1f}, .uv = vec2{quad.s0, quad.t1}};
+                                v2 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
+                                v3 = vertex_xu{.position = vec3{quad.x0, quad.y1, 0.1f}, .uv = vec2{quad.s0, quad.t0}};
+                                v4 = vertex_xu{.position = vec3{quad.x1, quad.y0, 0.1f}, .uv = vec2{quad.s1, quad.t1}};
+                                v5 = vertex_xu{.position = vec3{quad.x1, quad.y1, 0.1f}, .uv = vec2{quad.s1, quad.t0}};
+
+                            }
+                            else
+                            {
+                                vec2 top_left{quad.x0, quad.y0};
+                                vec2 bot_right{quad.x1, quad.y1};
+                                vec2 bot_left{quad.x0, quad.y1};
+                                vec2 top_right{quad.x1, quad.y0};
+
+                                vec2 top_left_uv{quad.s0, quad.t0};
+                                vec2 bot_right_uv{quad.s1, quad.t1};
+                                vec2 bot_left_uv{quad.s0, quad.t1};
+                                vec2 top_right_uv{quad.s1, quad.t0};
+                              
+                                v0 = vertex_xu{.position = vec3{top_left.x, top_left.y, 0.1f}, .uv = top_left_uv};
+                                v1 = vertex_xu{.position = vec3{bot_left.x, bot_left.y, 0.1f}, .uv = bot_left_uv};
+                                v2 = vertex_xu{.position = vec3{bot_right.x, bot_right.y, 0.1f}, .uv = bot_right_uv};
+                                v3 = vertex_xu{.position = vec3{top_left.x, top_left.y, 0.1f}, .uv = top_left_uv};
+                                v4 = vertex_xu{.position = vec3{bot_right.x, bot_right.y, 0.1f}, .uv = bot_right_uv};
+                                v5 = vertex_xu{.position = vec3{top_right.x, top_right.y, 0.1f}, .uv = top_right_uv};
+                            }
+
 
                             // move the cursor along to the width of the characters. 
                             // x_offset = x_offset + character_info.xadvance;
