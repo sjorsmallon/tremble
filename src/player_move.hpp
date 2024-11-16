@@ -430,7 +430,7 @@ std::tuple<vec3, vec3> my_walk_move(
     if (jump_pressed_this_frame)
     {
         std::print ("induced jump speed: {}\n", pm_jumpspeed * input_scale);
-        new_velocity.y = (pm_jumpspeed * input_scale);
+        new_velocity.y = pm_jumpspeed;
     }
 
 

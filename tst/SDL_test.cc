@@ -181,10 +181,20 @@ int main(int argc, char *argv[])
 
     // font stuff
     auto font_size = 22.f;
-    Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", font_size);
+    // Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", font_size);
+    Font font = create_font_at_size("../data/fonts/lucon.ttf", font_size);
+
     const int font_atlas_width = 512;
     const int font_atlas_height = 512;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
+
+    const char* texture_name = "../data/textures/orange_with_text.png";
+    // int x; 
+    // int y;
+    // int channels_in_file;
+    // int desired_channels = 4;
+    // auto texture_data = stbi_load(texture_name, &x, &y, &channels_in_file, desired_channels);
+    // auto orange_texture = create_texture()
 
 
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
@@ -627,7 +637,7 @@ int main(int argc, char *argv[])
                     false
                     );
 
-                    auto draw_line = [](
+                    auto draw_text_line = [](
                         std::string_view line,
                         Font_Texture_Atlas& atlas,
                         int start_x,
@@ -793,7 +803,7 @@ int main(int argc, char *argv[])
                         {
                             int current_y = start_y + line_idx * (line_height + spacing);
                             // Calculate the current y position for rendering
-                             draw_line(
+                             draw_text_line(
                             std::string_view{line},
                             font_texture_atlas,
                             start_x,
@@ -801,19 +811,18 @@ int main(int argc, char *argv[])
                             text_characters_gl_buffer,
                             xu_shader_program, ortographic_projection_matrix);
                         }
-
-
-
                     }
-                    int text_entry_y = text_entry_bar_min.y;
+
+                    int text_entry_y = text_entry_bar_min.y + (abs(text_entry_bar_min.y -  text_entry_bar_max.y) /  2);
                     // draw the input text
-                    draw_line(
+                    draw_text_line(
                         std::string_view{console.input_buffer},
                         font_texture_atlas,
                         start_x,
                         text_entry_y,
                         text_characters_gl_buffer,
                         xu_shader_program, ortographic_projection_matrix);
+
 
 
             }

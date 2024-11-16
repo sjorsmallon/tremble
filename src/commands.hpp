@@ -153,32 +153,6 @@ void register_command(Command_System& command_system, std::string_view command_n
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //@Note: the default argument here is so you can call it without args if you know the function does not have args.
 void execute_command(Command_System& command_system, std::string_view command_name, const std::vector<std::string>& args = std::vector<std::string>())
 {
@@ -203,10 +177,6 @@ void execute_command_string(Command_System command_system, std::string& command_
 
     command_system.commands[command](args);
 }
-
-
-
-
 
 
 
