@@ -810,3 +810,13 @@ std::vector<vertex_xu> quadVertices = {
     vertex_xu{vec3{-1.0f, -1.0f, 0.0f},   vec2{0.0f, 0.0f}},  // Bottom-left
     vertex_xu{vec3{ 1.0f, -1.0f, 0.0f},   vec2{1.0f, 0.0f}}   // Bottom-right
 };
+
+
+
+// this is unused because we directly convert to a function pointer that returns void and takes a vector of string.
+// Helper function to convert a function pointer to a std::function
+template <typename Ret, typename... Args>
+std::function<Ret(Args...)> function_pointer_to_std_function(Ret (*func)(Args...)) {
+    return [func](Args... args) { return func(args...); };
+}
+

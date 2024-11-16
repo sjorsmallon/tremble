@@ -2,6 +2,7 @@
 #include <vector>
 #include <type_traits>
 #include <unordered_set>
+#include <print>
 
 template <typename Type>
 concept is_non_zero = (sizeof(Type) > 0);
@@ -140,4 +141,57 @@ private:
     auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start); \
     std::print("{} took {:.3f} ms\n", #stmt, diff.count() / 1000.0); \
 } while(0)
+
+
+
+
+
+
+
+
+//@FIXME: move all these formatters to some other place.
+template <>
+struct std::formatter<std::vector<std::string>> : std::formatter<std::string> {
+    // Format the vector as a comma-separated list of quoted strings
+    auto format(const std::vector<std::string>& vec, std::format_context& ctx) const {
+        auto out = ctx.out();
+        bool first = true;
+        
+        // Start the format with an opening bracket
+        out = std::format_to(out, "[");
+        
+        // Iterate through the vector of strings
+        for (const auto& value : vec) {
+            if (!first) {
+                // Add a comma separator between elements
+                out = std::format_to(out, ", ");
+            }
+            // Format each string as quoted, e.g., "apple"
+            out = std::format_to(out, "\"{}\"", value);
+            first = false;
+        }
+        
+        // End the format with a closing bracket
+        return std::format_to(out, "]");
+    }
+};
+
+namespace console_colors
+{
+    constexpr const char* reset = "\033[0m";
+    constexpr const char* yellow = "\033[33m";
+}
+
+template <typename... Args>
+void print_warning(std::string_view format_str, Args&&... args) {
+    // Create the full formatted string with color codes
+    std::string formatted_message = std::format("{}[warning] {}{}", console_colors::yellow,
+                                                std::vformat(format_str, std::make_format_args(std::forward<Args>(args)...)),
+                                                console_colors::reset);
+
+    // Print the formatted message
+    std::print("{}\n", formatted_message);
+}
+
+
 

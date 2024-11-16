@@ -24,6 +24,7 @@
 #include "../src/player_move.hpp"
 #include "../src/font.hpp"
 #include "../src/console.hpp"
+#include "../src/commands.hpp"
 
 // yuck
 char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
@@ -54,6 +55,12 @@ char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
 
     // Handle unsupported keys by returning 0
     return 0;
+}
+
+bool g_noclip = false;
+void toggle_noclip()
+{
+    g_noclip = !g_noclip;
 }
 
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
@@ -249,9 +256,12 @@ int main(int argc, char *argv[])
    
     // game systems
     Console console{}; // in-game console
+    Command_System command_system{};
+    register_command(command_system, "noclip", toggle_noclip);
+
 
     // game state.
-    bool noclip = false;
+    // bool noclip = false; -> supplanted by g_noclip now.
     bool showing_console = false;
 
     auto camera = Camera{};
@@ -314,15 +324,18 @@ int main(int argc, char *argv[])
                     if (event.key.key == SDLK_BACKSPACE) key = '\b';
 
                     if (key != 0) handle_keystroke(console, key); 
+
+                    //@Note: for now, do it disjointed, so we do not tangle the systems at this point already.
+                    if (key == '\n') {execute_command(command_system, console.history.back());}
                 }
             }
-
 
             if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
             {
                 if (event.button.button == SDL_BUTTON_X1)
                 {
-                    noclip = !noclip;
+                    // noclip = !noclip;
+                    toggle_noclip();
                 }
             }
 
@@ -428,7 +441,7 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                if (noclip)
+                if (g_noclip)
                 {
                     face_indices = previous_face_indices;
                 }
@@ -462,7 +475,7 @@ int main(int argc, char *argv[])
                 previous_face_indices = face_indices;
             }
 
-            if (!noclip)
+            if (!g_noclip)
             {
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
@@ -534,7 +547,7 @@ int main(int argc, char *argv[])
                 );
 
             // upon entering noclip, draw the last collision.
-            if (noclip)
+            if (g_noclip)
             {
                 //  also draw the aabb at the last position.
                 draw_triangles(player_aabb_gl_buffer.VAO, player_aabb_gl_buffer.VBO, player_aabb_gl_buffer.vertex_count, xnc_shader_program,
