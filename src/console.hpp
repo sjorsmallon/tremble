@@ -27,3 +27,7 @@ void handle_keystroke(Console& console, char key)
     }
 }
 
+void clear_input(Console& console)
+{
+    console.input_buffer.clear();
+}

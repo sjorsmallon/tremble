@@ -286,7 +286,6 @@ int main(int argc, char *argv[])
     glm::mat4 aabb_transform_matrix(1.0f);
     std::vector<size_t> previous_face_indices{};
 
-
     while (running)
     {
         last = now;
@@ -319,9 +318,16 @@ int main(int argc, char *argv[])
                 {   
 
                     bool shift_pressed = (SDL_GetModState() & SDL_KMOD_SHIFT);
+                    bool control_pressed = (SDL_GetModState() & SDL_KMOD_CTRL);
                     char key = SDL_Keycode_to_char(event.key.key, shift_pressed);
 
                     if (event.key.key == SDLK_BACKSPACE) key = '\b';
+                    if (event.key.key == SDLK_BACKSPACE && control_pressed)
+                    {
+                        // erase the input line
+                        clear_input(console);
+                        continue; //
+                    } 
 
                     if (key != 0) handle_keystroke(console, key); 
 
@@ -535,7 +541,7 @@ int main(int argc, char *argv[])
 
         // rendering code goes here.
         {
-            glClearColor(0.0f,0.05f,0.0f, 1); // nsight says this is not allowed?
+            glClearColor(7.f/255.f, 7.f/255.f, 7.f/255.f, 1); // nsight says this is not allowed?
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // DO NOT FORGET TO CLEAR THE DEPTH BUFFER! it will yield just a black screen otherwise.
 
             // aabbs.

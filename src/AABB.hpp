@@ -212,12 +212,12 @@ inline std::vector<vertex_xnc> to_vertex_xnc(AABB& aabb)
     // Assign the color to each face's vertices by index. colors are hardcoded like this vbecause the compiler was complaining.
     auto all_vertices = std::vector<vertex_xnc>{
     // Front face 
-    vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal, .color =  {0.8f, 0.0f, 0.0f}},
-    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal, .color =  {0.8f, 0.0f, 0.0f}}, 
-    vertex_xnc{.position = vertices[1].position, .normal =  vertices[1].normal, .color =  {0.8f, 0.0f, 0.0f}}, 
-    vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal, .color =  {0.8f, 0.0f, 0.0f}},
-    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal, .color =  {0.8f, 0.0f, 0.0f}},
-    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal, .color =  {0.8f, 0.0f, 0.0f}}, 
+    vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal, .color =  {0.75f, 0.75f, 0.0f}},
+    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal, .color =  {0.75f, 0.75f, 0.0f}}, 
+    vertex_xnc{.position = vertices[1].position, .normal =  vertices[1].normal, .color =  {0.75f, 0.75f, 0.0f}}, 
+    vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal, .color =  {0.75f, 0.75f, 0.0f}},
+    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal, .color =  {0.75f, 0.75f, 0.0f}},
+    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal, .color =  {0.75f, 0.75f, 0.0f}}, 
 
     // Back face
     vertex_xnc{.position = vertices[4].position, .normal =  vertices[4].normal, .color =   {0.0f, 0.75f, 0.0f}},
@@ -236,12 +236,12 @@ inline std::vector<vertex_xnc> to_vertex_xnc(AABB& aabb)
     vertex_xnc{.position = vertices[5].position, .normal =  vertices[5].normal,.color =  {0.0f, 0.0f, 0.75f}},
 
     // Top face
-    vertex_xnc{.position = vertices[6].position, .normal =  vertices[6].normal,.color =  {0.75f, 0.75f, 0.0f}},
-    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal,.color =  {0.75f, 0.75f, 0.0f}},
-    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal,.color =  {0.75f, 0.75f, 0.0f}},
-    vertex_xnc{.position = vertices[7].position, .normal =  vertices[7].normal,.color =  {0.75f, 0.75f, 0.0f}},
-    vertex_xnc{.position = vertices[6].position, .normal =  vertices[6].normal,.color =  {0.75f, 0.75f, 0.0f}},
-    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal,.color =  {0.75f, 0.75f, 0.0f}},
+    vertex_xnc{.position = vertices[6].position, .normal =  vertices[6].normal,.color =  {0.8f, 0.0f, 0.0f} },
+    vertex_xnc{.position = vertices[2].position, .normal =  vertices[2].normal,.color =  {0.8f, 0.0f, 0.0f} },
+    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal,.color =  {0.8f, 0.0f, 0.0f} },
+    vertex_xnc{.position = vertices[7].position, .normal =  vertices[7].normal,.color =  {0.8f, 0.0f, 0.0f} },
+    vertex_xnc{.position = vertices[6].position, .normal =  vertices[6].normal,.color =  {0.8f, 0.0f, 0.0f} },
+    vertex_xnc{.position = vertices[3].position, .normal =  vertices[3].normal,.color =  {0.8f, 0.0f, 0.0f} },
 
     // Left face 
     vertex_xnc{.position = vertices[0].position, .normal =  vertices[0].normal,.color =  {0.75f, 0.0f, 0.75f}},
