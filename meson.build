@@ -1,6 +1,10 @@
 project('test_project', 'cpp', 
   default_options : ['cpp_std=c++23', 'buildtype=debug'])
 
+
+
+
+
 # this is to deal with it complaining about my union initialization.
 add_project_arguments('-Wno-missing-braces', language: 'cpp')
 
@@ -12,6 +16,8 @@ sdl3_lib = declare_dependency(
   include_directories : 'inc',
   link_args : ['../external/static_libraries/SDL3.lib', '-lgdi32', '-lopengl32']
 )
+
+
 
 # Add SDL3 as a dependency (optional step in case you want to fetch SDL3 with subprojects)
 # SDL3 dependency should normally be handled by a pkg-config file if dynamic linking is desired
@@ -55,9 +61,15 @@ executable('server_test',
   install : false
 )
 
-# Build server_test
+# Build font test
 executable('font_test',
   'tst/font_test.cc',
   include_directories : inc_dir,
   install : false
 )
+
+# build the command test
+executable('command_test',
+  'tst/command_test.cc',
+  include_directories : inc_dir,
+  install : false)
