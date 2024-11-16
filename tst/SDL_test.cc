@@ -44,7 +44,7 @@ char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
         { SDLK_COMMA, ",<" }, { SDLK_PERIOD, ".>" }, { SDLK_SLASH, "/?" },
         { SDLK_SEMICOLON, ";:" }, { SDLK_APOSTROPHE, "'\"" }, { SDLK_LEFTBRACKET, "[{" },
         { SDLK_RIGHTBRACKET, "]}" }, { SDLK_BACKSLASH, "\\|" }, { SDLK_MINUS, "-_" },
-        { SDLK_EQUALS, "=+" }
+        { SDLK_EQUALS, "=+" }, {SDLK_BACKSPACE, "\b\b"}
     };
 
     // Lookup the key in the map
@@ -321,12 +321,11 @@ int main(int argc, char *argv[])
                     bool control_pressed = (SDL_GetModState() & SDL_KMOD_CTRL);
                     char key = SDL_Keycode_to_char(event.key.key, shift_pressed);
 
-                    if (event.key.key == SDLK_BACKSPACE) key = '\b';
-                    if (event.key.key == SDLK_BACKSPACE && control_pressed)
+                    if (key == '\b' && control_pressed)
                     {
                         // erase the input line
                         clear_input(console);
-                        continue; //
+                        continue; // don't do anything else.
                     } 
 
                     if (key != 0) handle_keystroke(console, key); 
