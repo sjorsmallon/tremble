@@ -697,6 +697,7 @@ enum class Texture_Format {
     Depth,
 };
 
+
 struct GL_Texture
 {
     uint32_t handle;
@@ -708,12 +709,14 @@ struct GL_Texture
 };
 
 // no texture packing, just assign each texture its own activev texture (window frame).
-GL_Texture create_texture(Texture_Format format, std::vector<uint8_t>& data, int width, int height)
+GL_Texture register_texture_opengl(std::vector<uint8_t>& data, int width, int height, Texture_Format format)
 {
     static int texture_unit_counter = 0;  // Static counter for texture units (glActiveTexture(GL_TEXTURE_0 + texture_unit_counter))
 
     GLuint texture;
     glGenTextures(1, &texture);
+  
+    glActiveTexture(GL_TEXTURE0 + texture_unit_counter);  // Activate the texture unit
     glBindTexture(GL_TEXTURE_2D, texture);
     
     GLenum gl_format;
@@ -749,12 +752,9 @@ GL_Texture create_texture(Texture_Format format, std::vector<uint8_t>& data, int
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glActiveTexture(GL_TEXTURE0 + texture_unit_counter);  // Activate the texture unit
-    glBindTexture(GL_TEXTURE_2D, texture);  // Bind the texture to the active texture unit
-    texture_unit_counter += 1;
+    // glBindTexture(GL_TEXTURE_2D, texture);  // Bind the texture to the active texture unit
 
-    assert(texture_unit_counter < 15 && "ran out of active textures.\n");
-
+    assert(texture_unit_counter < 15 && "ran out of active textures. If you hit this you need to rewrite the way you use textures! \n");
 
     GL_Texture gl_texture{};
     gl_texture.handle = texture;
@@ -763,6 +763,7 @@ GL_Texture create_texture(Texture_Format format, std::vector<uint8_t>& data, int
     gl_texture.format = format;
     gl_texture.texture_unit = texture_unit_counter;
 
+    texture_unit_counter += 1;
 
 
     return gl_texture;

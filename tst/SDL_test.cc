@@ -26,6 +26,11 @@
 #include "../src/console.hpp"
 #include "../src/commands.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+
+
 // yuck
 char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
     // Map of SDL3 keycodes to characters (letters, numbers, and symbols)
@@ -188,49 +193,71 @@ int main(int argc, char *argv[])
     const int font_atlas_height = 512;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
 
-    const char* texture_name = "../data/textures/orange_with_text.png";
-    // int x; 
-    // int y;
-    // int channels_in_file;
-    // int desired_channels = 4;
-    // auto texture_data = stbi_load(texture_name, &x, &y, &channels_in_file, desired_channels);
-    // auto orange_texture = create_texture()
+    // create a gl texture.
+    GL_Texture font_bitmap_texture = register_texture_opengl(
+        font_texture_atlas.atlas_bitmap,
+        font_texture_atlas.width,
+        font_texture_atlas.height,
+        Texture_Format::Red
+        );
 
+    const char* texture_name = "../data/textures/orange_with_text.png";
+    int x; 
+    int y;
+    int channels_in_file;
+    int desired_channels = 4;
+    uint8_t* data = stbi_load(texture_name, &x, &y, &channels_in_file, desired_channels);
+    std::print("x: {}, y: {}, channels_in_file: {}\n", x, y, channels_in_file);
+    std::vector<uint8_t> unfolded_data(data, data + ((x * y * channels_in_file) / sizeof(uint8_t)));
+    auto wall_texture = register_texture_opengl(unfolded_data, x, y, Texture_Format::RGBA);
+
+    // also support different max_uv for tiling.
+    auto wall_width = 1024;
+    auto wall_height = 1024;
+    auto wall_vertices = generate_vertex_xu_quad_from_plane(vec3{0.f, 0.f, 0.f}, vec3{0.f, 0.f, -1.f}, wall_width, wall_height);
+    float tile_size = 256;
+    auto wall_tile_scale = float{1024 / tile_size};
+    std::print("wall_tile_scale: {}\n", wall_tile_scale);
+    // note: this kind of sucks to deal with but I don't care at the moment. all uv shit is flipped because
+    // I don't like drawing things upside down and the wrong way around.
+    for(auto& vertex: wall_vertices)
+    {
+        vertex.uv.u = 1.f - vertex.uv.u;
+        vertex.uv.v = 1.f - vertex.uv.v;
+    }
+    auto wall_gl_buffer = create_interleaved_xu_buffer(wall_vertices);
 
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
     constexpr auto max_character_count_in_string = 512;
     constexpr auto vertices_per_character = 6;
-
-    auto min = vec2{0.f, 0.f};
-    auto max = vec2{1.f, 1.f};
-    auto vertices = generate_vertex_xu_quad(min, max); 
     std::vector<vertex_xu> text_character_vertices(max_character_count_in_string * vertices_per_character);
     auto text_characters_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
 
     // shaders
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-    
+   
     auto xu_vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
     auto xu_fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
     uint32_t xu_shader_program = create_shader_program(xu_vertex_shader_string.c_str(), xu_fragment_shader_string.c_str());
+
+    auto text_vertex_shader_string = file_to_string("../data/shaders/text/text.vert");
+    auto text_fragment_shader_string = file_to_string("../data/shaders/text/text.frag");
+    uint32_t text_shader_program = create_shader_program(text_vertex_shader_string.c_str(), text_fragment_shader_string.c_str());
 
     auto x_vertex_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.vert");
     auto x_fragment_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.frag");
     uint32_t x_shader_program = create_shader_program(x_vertex_shader_string.c_str(), x_fragment_shader_string.c_str());
 
 
-    // create a gl texture.
-    GL_Texture font_bitmap_texture = create_texture(
-        Texture_Format::Red, //u8
-        font_texture_atlas.atlas_bitmap,
-        font_texture_atlas.width,
-        font_texture_atlas.height
-        );
+    auto tiled_vertex_xu_vertex_shader_string = file_to_string("../data/shaders/tiled_vertex_xu/tiled_vertex_xu.vert");
+    auto tiled_vertex_xu_fragment_shader_string = file_to_string("../data/shaders/tiled_vertex_xu/tiled_vertex_xu.frag");
+    uint32_t tiled_vertex_xu_shader_program = create_shader_program(tiled_vertex_xu_vertex_shader_string.c_str(), tiled_vertex_xu_fragment_shader_string.c_str());
 
 
-    //@note: please don't forget to bind the texture you fool..
-    glActiveTexture(GL_TEXTURE0 + font_bitmap_texture.texture_unit);
-    set_uniform(xu_shader_program,"text_bitmap", 0);
+    set_uniform(text_shader_program, "text_bitmap", 0);
+    set_uniform(xu_shader_program,"base_texture", 1);
+    set_uniform(tiled_vertex_xu_shader_program, "base_texture", 1);
+    set_uniform(tiled_vertex_xu_shader_program, "tile_scale", wall_tile_scale);
 
     // base geometry
     auto path = std::string{"../data/just_a_floor_AABBs"};
@@ -268,7 +295,6 @@ int main(int argc, char *argv[])
     Console console{}; // in-game console
     Command_System command_system{};
     register_command(command_system, "noclip", toggle_noclip);
-
 
     // game state.
     // bool noclip = false; -> supplanted by g_noclip now.
@@ -601,6 +627,19 @@ int main(int argc, char *argv[])
                 }
 
             }
+        
+            // draw the textured wall.
+            draw_triangles(
+                wall_gl_buffer.VAO,
+                wall_gl_buffer.VBO,
+                wall_gl_buffer.vertex_count, tiled_vertex_xu_shader_program,
+                glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                get_look_at_view_matrix(camera),
+                glm::mat4(1.0f),
+                false // wireframe
+            );
+
+
 
             if (showing_console)
             {
@@ -608,7 +647,6 @@ int main(int argc, char *argv[])
                 float min_z = -1.0f;
                 float max_z = 1.0f;
                 glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(window_width), 0.0f, static_cast<float>(window_height), min_z, max_z);
-                // set_uniform(xu_shader_program, "color", );
                 // draw background
                 set_uniform(x_shader_program, "color", vec4{7.0f/255.f, 38.0f/255.f, 38.0f/255.f, .5f});
 
@@ -636,6 +674,7 @@ int main(int argc, char *argv[])
                     glm::mat4(1.0f), // identity transformation matrix.
                     false
                     );
+
 
                     auto draw_text_line = [](
                         std::string_view line,
@@ -761,7 +800,7 @@ int main(int argc, char *argv[])
                             glBufferSubData(GL_ARRAY_BUFFER, offset, text_character_vertices.size() * sizeof(vertex_xu), text_character_vertices.data());
                         }
                         // ok, all the data has been replaced. now to draw using the vertex_xu shader.
-                        glActiveTexture(GL_TEXTURE0);
+                        // glActiveTexture(GL_TEXTURE0);
 
                         draw_triangles(
                             text_buffer.VAO,
@@ -791,6 +830,7 @@ int main(int argc, char *argv[])
                     auto latest_entry_idx = console.history.index_of_latest_entry();
 
                     // Determine the number of lines to render (either `history_size` or `max_lines_to_render`, whichever is smaller)
+
                     int number_of_lines_to_render = std::min(history_size, max_lines_to_render);
                     for (int line_idx = 0; line_idx != number_of_lines_to_render; ++line_idx)
                     {
@@ -809,7 +849,7 @@ int main(int argc, char *argv[])
                             start_x,
                             current_y,
                             text_characters_gl_buffer,
-                            xu_shader_program, ortographic_projection_matrix);
+                            text_shader_program, ortographic_projection_matrix);
                         }
                     }
 
@@ -821,9 +861,7 @@ int main(int argc, char *argv[])
                         start_x,
                         text_entry_y,
                         text_characters_gl_buffer,
-                        xu_shader_program, ortographic_projection_matrix);
-
-
+                        text_shader_program, ortographic_projection_matrix);
 
             }
 
