@@ -46,10 +46,6 @@ Address& Server::get_client_address(Server& server, int client_idx)
     return server.client_addresses[client_idx];
 }
 
-
-
-
-
 enum CONNECTION: uint8_t
 {
     CLIENT_CONNECTION_REQUEST,

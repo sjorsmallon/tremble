@@ -1,30 +1,31 @@
+#define NOMINMAX // fuck windows, all my homies hate windows
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #define SDL_MAIN_HANDLED
-
-#include <windows.h>  // error box whatever.
-
 #include <glad/glad.h>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm.hpp>
 
-#include <unordered_set>
 
+#include <unordered_set>
+#include <algorithm> // std::min...
 #include <print>
 #include <array>
-// #include <chrono>
-#include "../src/input.hpp"
-#include "../src/gl_helpers.hpp"
+#include <thread>
+
 #include "../src/AABB.hpp"
-#include "../src/camera.hpp"
-#include "../src/debug_draw.hpp"
 #include "../src/bsp.hpp"
-#include "../src/player_move.hpp"
-#include "../src/font.hpp"
-#include "../src/console.hpp"
+#include "../src/camera.hpp"
 #include "../src/commands.hpp"
+#include "../src/console.hpp"
+#include "../src/debug_draw.hpp"
+#include "../src/font.hpp"
+#include "../src/gl_helpers.hpp"
+#include "../src/input.hpp"
+#include "../src/player_move.hpp"
+#include "../src/udp_socket.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -32,8 +33,8 @@
 
 
 // yuck
-char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
-    // Map of SDL3 keycodes to characters (letters, numbers, and symbols)
+char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false)
+{
     static const std::unordered_map<SDL_Keycode, std::string> key_map = {
         { SDLK_A, "aA" }, { SDLK_B, "bB" }, { SDLK_C, "cC" }, { SDLK_D, "dD" },
         { SDLK_E, "eE" }, { SDLK_F, "fF" }, { SDLK_G, "gG" }, { SDLK_H, "hH" },
@@ -52,13 +53,12 @@ char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false) {
         { SDLK_EQUALS, "=+" }, {SDLK_BACKSPACE, "\b\b"}
     };
 
-    // Lookup the key in the map
     auto it = key_map.find(keycode);
     if (it != key_map.end()) {
         return shift_pressed ? it->second[1] : it->second[0];
     }
 
-    // Handle unsupported keys by returning 0
+    // sentinel value: 0 if not found.
     return 0;
 }
 
@@ -113,10 +113,9 @@ int main(int argc, char *argv[])
             std::print("SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8): {}\n", result);  // 8 bits for stencil buffer
         }
 
-
         // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
         window = SDL_CreateWindow(
-            "SDL3/OpenGL Demo", window_width, window_height, 
+            "Tremble", window_width, window_height, 
             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
         if (window == nullptr)
@@ -201,6 +200,7 @@ int main(int argc, char *argv[])
         Texture_Format::Red
         );
 
+    // load the orange 128 * 128 texture.
     const char* texture_name = "../data/textures/orange_with_text.png";
     int x; 
     int y;
@@ -210,8 +210,6 @@ int main(int argc, char *argv[])
     std::print("x: {}, y: {}, channels_in_file: {}\n", x, y, channels_in_file);
     std::vector<uint8_t> unfolded_data(data, data + ((x * y * channels_in_file) / sizeof(uint8_t)));
     auto wall_texture = register_texture_opengl(unfolded_data, x, y, Texture_Format::RGBA);
-
-    // also support different max_uv for tiling.
     auto wall_width = 1024;
     auto wall_height = 1024;
     auto wall_vertices = generate_vertex_xu_quad_from_plane(vec3{0.f, 0.f, 0.f}, vec3{0.f, 0.f, -1.f}, wall_width, wall_height);
@@ -227,6 +225,9 @@ int main(int argc, char *argv[])
     }
     auto wall_gl_buffer = create_interleaved_xu_buffer(wall_vertices);
 
+
+
+    // set up the text buffer
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
     constexpr auto max_character_count_in_string = 512;
     constexpr auto vertices_per_character = 6;
@@ -235,29 +236,28 @@ int main(int argc, char *argv[])
 
     // shaders
     uint32_t xnc_shader_program = create_interleaved_xnc_shader_program();
-   
+
     auto xu_vertex_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.vert");
     auto xu_fragment_shader_string = file_to_string("../data/shaders/vertex_xu/vertex_xu.frag");
     uint32_t xu_shader_program = create_shader_program(xu_vertex_shader_string.c_str(), xu_fragment_shader_string.c_str());
+    set_uniform(xu_shader_program,"base_texture", 1);
 
     auto text_vertex_shader_string = file_to_string("../data/shaders/text/text.vert");
     auto text_fragment_shader_string = file_to_string("../data/shaders/text/text.frag");
     uint32_t text_shader_program = create_shader_program(text_vertex_shader_string.c_str(), text_fragment_shader_string.c_str());
+    set_uniform(text_shader_program, "text_bitmap", 0);
 
     auto x_vertex_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.vert");
     auto x_fragment_shader_string = file_to_string("../data/shaders/vertex_color_x/vertex_color_x.frag");
     uint32_t x_shader_program = create_shader_program(x_vertex_shader_string.c_str(), x_fragment_shader_string.c_str());
 
-
     auto tiled_vertex_xu_vertex_shader_string = file_to_string("../data/shaders/tiled_vertex_xu/tiled_vertex_xu.vert");
     auto tiled_vertex_xu_fragment_shader_string = file_to_string("../data/shaders/tiled_vertex_xu/tiled_vertex_xu.frag");
     uint32_t tiled_vertex_xu_shader_program = create_shader_program(tiled_vertex_xu_vertex_shader_string.c_str(), tiled_vertex_xu_fragment_shader_string.c_str());
-
-
-    set_uniform(text_shader_program, "text_bitmap", 0);
-    set_uniform(xu_shader_program,"base_texture", 1);
     set_uniform(tiled_vertex_xu_shader_program, "base_texture", 1);
     set_uniform(tiled_vertex_xu_shader_program, "tile_scale", wall_tile_scale);
+
+
 
     // base geometry
     auto path = std::string{"../data/just_a_floor_AABBs"};
@@ -322,6 +322,46 @@ int main(int argc, char *argv[])
     glm::mat4 aabb_transform_matrix(1.0f);
     std::vector<size_t> previous_face_indices{};
 
+
+    // server stuff
+    constexpr auto server_port_number = 2020;
+    constexpr auto client_port_number = 2024;
+    UDPsocket::IPv4 ipaddr{};
+
+    UDPsocket client_socket{};
+    {
+        client_socket.open();
+        client_socket.broadcast(true);
+        client_socket.bind(client_port_number);
+
+        auto join_server_request_packet = construct_message_only_packet(Message_Type::MESSAGE_JOIN_SERVER);
+
+        // try to connect to the server.
+        if (client_socket.send(join_server_request_packet, UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+        {
+            print_network("[client] send join_server_request failed.\n");
+        }
+        else 
+        {
+            print_network("[client] send message succeeded.\n");
+        }
+    }
+
+    auto join_server_result_packet = Packet{};
+
+    if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // blocking
+    {
+        print_network("[client] recv failed while waiting for the join_server result.\n");
+    }
+    else
+    {
+        if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
+        {
+            print_network("[client] join server accepted!\n");
+        }
+    }
+
+
     while (running)
     {
         last = now;
@@ -364,6 +404,8 @@ int main(int argc, char *argv[])
                         continue; // don't do anything else.
                     } 
 
+                    // FIXME: this is not good enough! we need to also be able to pass up, down, left, right
+                    // which do not have these ascii values.
                     if (key != 0) handle_keystroke(console, key); 
 
                     //@Note: for now, do it disjointed, so we do not tangle the systems at this point already.
@@ -379,7 +421,6 @@ int main(int argc, char *argv[])
                     toggle_noclip();
                 }
             }
-
         }
 
         // handle keyboard input.
@@ -426,7 +467,6 @@ int main(int argc, char *argv[])
 
                     glBindVertexArray(0);
                 }
-
 
                 // update player_aabb to world space (to visualize any collisions.)
                 auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
@@ -870,6 +910,20 @@ int main(int argc, char *argv[])
         SDL_GL_SwapWindow(window);
     }
 
+
+        // send a quick disconnect message (for my own sake.)
+    Packet leave_server_packet = construct_message_only_packet(Message_Type::MESSAGE_LEAVE_SERVER);
+
+    // this is not coming through. why not?
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (client_socket.send(leave_server_packet, UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+    {
+        print_network("[client] SENDING FAILED!\n");
+    }
+    else
+    {
+        print_network("[client] disconnecting.\n");
+    }
 
     SDL_GL_DestroyContext(gl_context);
 

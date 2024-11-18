@@ -180,6 +180,7 @@ namespace console_colors
 {
     constexpr const char* reset = "\033[0m";
     constexpr const char* yellow = "\033[33m";
+    constexpr const char* nice_teal = "\033[38;2;12;203;175m";
 }
 
 template <typename... Args>
@@ -192,6 +193,21 @@ void print_warning(std::string_view format_str, Args&&... args) {
     // Print the formatted message
     std::print("{}\n", formatted_message);
 }
+
+
+
+template <typename... Args>
+void print_network(std::string_view format_str, Args&&... args) {
+    // Create the full formatted string with color codes
+    std::string formatted_message = std::format("{}[network] {}{}", console_colors::nice_teal,
+                                                std::vformat(format_str, std::make_format_args(std::forward<Args>(args)...)),
+                                                console_colors::reset);
+
+    // Print the formatted message
+    std::print("{}\n", formatted_message);
+}
+
+
 
 
 

@@ -3,7 +3,7 @@
 #include <print>
 #include <cassert>
 #include "concepts.hpp"
-#include "message.h"
+#include "message.hpp"
 
 constexpr int no_sequence_id = 0;
 

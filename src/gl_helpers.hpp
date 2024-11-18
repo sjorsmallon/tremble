@@ -521,7 +521,6 @@ std::vector<vertex_xnc> create_default_triangle()
     return triangle;
 }
 
-
 // Function to generate a quad defined by a plane's normal and position
 std::vector<vertex_xu> generate_vertex_xu_quad_from_plane(const vec3& center, const vec3& normal, float width, float height) {
     std::vector<vertex_xu> vertices(6);  // A quad has 6 vertices
