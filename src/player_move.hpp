@@ -616,3 +616,97 @@ std::tuple<vec3, vec3> player_move(
     }
 
 }
+
+
+
+//@Note(SMIA): I know all of this is wildly inefficient, but I need to think about how this works
+// before I write anything more classy.
+// helper functions to classify planes in the BSP.
+std::tuple<Collider_Planes, std::vector<size_t>> collect_and_classify_intersecting_planes(const BSP* bsp, const std::vector<vertex_xnc>& bsp_vertices, AABB& colliding_aabb)
+{
+    constexpr auto WORLD_UP = vec3{0.f, 1.f, 0.f};
+    // FIXME(Sjors): formalize this value. I "found" it by walking across multiple aabb and getting the lowest one,
+    // which I think is the side of the adjacent aabb.
+    // are we intersecting by a large enough "penetration depth"?
+    constexpr auto PENETRATION_DEPTH_TRESHOLD = 2.f;
+ 
+    constexpr auto CEILING_ANGLE_COS_TRESHOLD =  -.707f; // 45 degree angle -(cos(45 degrees)) -> -cos(0,785398 rads)
+    constexpr auto FLOOR_ANGLE_COS_TRESHOLD =  .707f; // 45 degree angle (cos(45 degrees)) -> cos(0,785398 rads)
+
+    //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
+    constexpr auto HEIGHT_OVERLAP_TRESHOLD = 5.f;
+
+    auto all_face_indices = bsp_trace_AABB(bsp, colliding_aabb, bsp_vertices);
+    all_face_indices = filter_duplicates(all_face_indices);
+    
+    auto ground_face_indices  = std::vector<size_t>{};
+    auto ceiling_face_indices = std::vector<size_t>{};
+    auto wall_face_indices    = std::vector<size_t>{};
+
+
+    // filter aabb
+    for (auto& face_idx: all_face_indices)
+    {   
+        const auto &v0 = bsp_vertices[face_idx].position;
+        const auto &v1 = bsp_vertices[face_idx + 1].position;
+        const auto &v2 = bsp_vertices[face_idx + 2].position;
+
+        auto normal = compute_triangle_normal(v0, v1, v2);
+
+        float max_penetration_depth = calculate_max_penetration_depth(
+            colliding_aabb,
+            v0, v1 , v2);
+
+        if (max_penetration_depth > PENETRATION_DEPTH_TRESHOLD)
+        {
+            auto triangle_aabb = aabb_from_triangle(v0, v1, v2);
+            auto overlap = vec3{.x = fabs(colliding_aabb.min.x - triangle_aabb.max.x ),.y = fabs(colliding_aabb.min.y - triangle_aabb.max.y), .z = fabs(colliding_aabb.min.z - triangle_aabb.max.z)};
+            auto cos_angle = dot(normal, WORLD_UP);
+            if ( (cos_angle > FLOOR_ANGLE_COS_TRESHOLD) ) //  floor (45 degree angle)
+            {
+                // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                if (triangle_aabb.max.y - colliding_aabb.min.y < 5.f)
+                {
+                    ground_face_indices.push_back(face_idx);
+                }
+            }
+            else if ( (cos_angle < CEILING_ANGLE_COS_TRESHOLD)) // ceiling (45 degree angle)
+            {
+                // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
+                if (fabs(triangle_aabb.max.y - colliding_aabb.max.y)  < 5.f)
+                {
+                    ceiling_face_indices.push_back(face_idx);
+                }
+            }
+            else
+            {
+                // what is the height overlap? (this prevents us from "tripping" over floor tiles that have a normal facing the player direction, but are actually "underneath" the floor.
+                // image running over the top of aligned AABBS, and then "tripping" over the transition from one AABB to the other because you are "colliding" with the side of the AABB
+                // you want to cross over.)
+                if (overlap.y > HEIGHT_OVERLAP_TRESHOLD) 
+                {
+                    wall_face_indices.push_back(face_idx);
+                }
+            }
+        }
+    }
+
+    // plane is combination of v0 and the calculated normal.
+    auto create_planes_from_face_indices = [](const std::vector<size_t>& face_indices, const std::vector<vertex_xnc>& vertices) -> std::vector<Plane>
+    {
+        auto planes = std::vector<Plane>{};
+        for (auto& face_idx: face_indices)
+        {
+            planes.push_back(Plane{vertices[face_idx].position, compute_triangle_normal(vertices[face_idx].position, vertices[face_idx + 1].position, vertices[face_idx + 2].position)});
+        }
+
+        return planes;
+    };
+
+    auto ground_planes  = create_planes_from_face_indices(ground_face_indices, bsp_vertices);
+    auto ceiling_planes = create_planes_from_face_indices(ceiling_face_indices, bsp_vertices);
+    auto wall_planes    = create_planes_from_face_indices(wall_face_indices, bsp_vertices);
+    auto collider_planes = Collider_Planes{.ground_planes = std::move(ground_planes), .ceiling_planes = std::move(ceiling_planes), .wall_planes = std::move(wall_planes)};
+
+    return {collider_planes, all_face_indices};
+}

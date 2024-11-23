@@ -4,11 +4,11 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/norm.hpp>  // for length2
 
+#include <array>
 #include <cfloat> // FLT_MAX
 #include <cmath>
 #include <functional>
 #include <numeric> // iota..
-
 
 // move to math 
 size_t abs(size_t a, size_t b) {
@@ -394,12 +394,12 @@ bool triangle_intersects_aabb(const vec3& p0, const vec3& p1, const vec3& p2, co
 
 //FIXME:  provide world_up instead of hardcoding.
 // return ground_faces, ceiling_faces, colliding_faces)
-inline std::vector<size_t> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
+inline std::vector<size_t> bsp_trace_AABB(const BSP* bsp, const AABB& aabb, const std::vector<vertex_xnc>& all_faces_buffer) {
 
     std::vector<size_t> colliding_faces;
 
     // Recursive lambda for traversing the BSP tree
-    std::function<void(BSP*)> traverse = [&](BSP* node) {
+    std::function<void(const BSP*)> traverse = [&](const BSP* node) {
         if (node == nullptr) return;
         
         // Get the three vertices of the triangle from `all_faces_buffer`
@@ -434,7 +434,6 @@ inline std::vector<size_t> bsp_trace_AABB(BSP* bsp, const AABB& aabb, const std:
 
     return colliding_faces;
 }
-
 
 
 

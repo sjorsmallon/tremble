@@ -1,6 +1,7 @@
 #pragma once
 #include "vec.hpp"
 #include <print>
+
 struct Plane
 {
 	vec3 point;

@@ -225,8 +225,6 @@ int main(int argc, char *argv[])
     }
     auto wall_gl_buffer = create_interleaved_xu_buffer(wall_vertices);
 
-
-
     // set up the text buffer
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
     constexpr auto max_character_count_in_string = 512;
@@ -262,11 +260,11 @@ int main(int argc, char *argv[])
     // base geometry
     auto path = std::string{"../data/just_a_floor_AABBs"};
     auto aabbs = read_AABBs_from_file(path);
-    auto aabbs_vertices  = to_vertex_xnc(aabbs);
+    auto world_map_vertices  = to_vertex_xnc(aabbs);
     // i do not trust auto assignment.
-    std::vector<vertex_xnc> base_aabbs_vertices = aabbs_vertices;
-    auto aabb_gl_buffer = create_interleaved_xnc_buffer(aabbs_vertices);
-    BSP* bsp = build_bsp(aabbs_vertices);
+    std::vector<vertex_xnc> base_aabbs_vertices = world_map_vertices;
+    auto aabb_gl_buffer = create_interleaved_xnc_buffer(world_map_vertices);
+    BSP* world_map_bsp = build_bsp(world_map_vertices);
 
     // console geometry
     auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
@@ -444,139 +442,67 @@ int main(int argc, char *argv[])
 
             // collision detection.
             std::vector<size_t> face_indices;
-            auto ground_face_indices  = std::vector<size_t>{};
-            auto ceiling_face_indices = std::vector<size_t>{};
-            auto wall_face_indices    = std::vector<size_t>{};
+            // restore color to the previous face_indices
+            for (auto& face_idx: previous_face_indices)
             {
-                // restore color to the previous face_indices
-                for (auto& face_idx: previous_face_indices)
-                {
-                    std::array<vertex_xnc, 3> intersecting_face{
-                        base_aabbs_vertices[face_idx],
-                        base_aabbs_vertices[face_idx + 1],
-                        base_aabbs_vertices[face_idx + 2]
-                    };
-                    auto face_offset = face_idx * sizeof(vertex_xnc);
-                
-                    // color the triangle white.
-                    glBindVertexArray(aabb_gl_buffer.VAO); 
-                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                std::array<vertex_xnc, 3> intersecting_face{
+                    base_aabbs_vertices[face_idx],
+                    base_aabbs_vertices[face_idx + 1],
+                    base_aabbs_vertices[face_idx + 2]
+                };
+                auto face_offset = face_idx * sizeof(vertex_xnc);
+            
+                // color the triangle white.
+                glBindVertexArray(aabb_gl_buffer.VAO); 
+                glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
 
-                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                    glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
+                GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
 
-                    glBindVertexArray(0);
-                }
-
-                // update player_aabb to world space (to visualize any collisions.)
-                auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
-                auto all_face_indices = bsp_trace_AABB(bsp, aabb, aabbs_vertices);
-
-                all_face_indices = filter_duplicates(all_face_indices);
-                
-                for (auto& face_idx: all_face_indices)
-                {   
-                    auto &v0 = aabbs_vertices[face_idx].position;
-                    auto &v1 = aabbs_vertices[face_idx + 1].position;
-                    auto &v2 = aabbs_vertices[face_idx + 2].position;
-
-                    auto normal = compute_triangle_normal(v0, v1, v2);
-
-                    float max_penetration_depth = calculate_max_penetration_depth(
-                        aabb,
-                        v0, v1 , v2);
-    
-                    // FIXME(Sjors): formalize this value. I "found" it by walking across multiple aabb and getting the lowest one,
-                    // which I think is the side of the adjacent aabb.
-                    // are we intersecting by a large enough "penetration depth"?
-                    if (max_penetration_depth > 2.f)
-                    {
-                        auto triangle_aabb = aabb_from_triangle(v0, v1, v2);
-                        auto overlap = vec3{.x = fabs(aabb.min.x - triangle_aabb.max.x ),.y = fabs(aabb.min.y - triangle_aabb.max.y), .z = fabs(aabb.min.z - triangle_aabb.max.z)};
-                        auto cos_angle = dot(normal, world_up);
-                        if ( (cos_angle > 0.707f) ) //  floor (45 degree angle)
-                        {
-                            // edge case where we come at a "floor" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
-                            if (triangle_aabb.max.y - aabb.min.y < 5.f)
-                            {
-                                ground_face_indices.push_back(face_idx);
-                            }
-                        }
-                        else if ( (cos_angle < -.707f)) // ceiling (45 degree angle)
-                        {
-                            // edge case where we come at a "ceiling" from the side, and we stick to it. I have a feeling I need to revisit this very soon.
-                            if (fabs(triangle_aabb.max.y - aabb.max.y)  < 5.f)
-                            {
-                                ceiling_face_indices.push_back(face_idx);
-                            }
-                        }
-                        else
-                        {
-                            // what is the height overlap?
-                            //@Note(Sjors): this number is pulled out of my ass. but I want to check if this resolves at least the horizontal collisions.
-                            if (overlap.y > 5.f) // the overlap we have between my aabb and the triangle in the y direction.
-                            {
-                                wall_face_indices.push_back(face_idx);
-                            }
-                        }
-                    }
-                }
-
-                if (g_noclip)
-                {
-                    face_indices = previous_face_indices;
-                }
-
-                // color the intersecting face indices white.
-                for (auto& face_idx: face_indices)
-                {
-
-                    std::array<vertex_xnc, 3> intersecting_face{
-                        aabbs_vertices[face_idx],
-                        aabbs_vertices[face_idx + 1],
-                        aabbs_vertices[face_idx + 2]
-                    };
-                
-                    intersecting_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                    intersecting_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                    intersecting_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
-                    
-
-                    // color the triangle white.
-                    glBindVertexArray(aabb_gl_buffer.VAO); 
-                    glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
-                    auto face_offset = face_idx * sizeof(vertex_xnc);
-
-                    GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
-                    glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
-
-                    glBindVertexArray(0);
-                }
-
-                previous_face_indices = face_indices;
+                glBindVertexArray(0);
             }
+
+            // update player_aabb to world space (to visualize any collisions.)
+            auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
+            auto [collider_planes, all_face_indices] = collect_and_classify_intersecting_planes(world_map_bsp, world_map_vertices, aabb);
+
+            if (g_noclip)
+            {
+                face_indices = previous_face_indices;
+            }
+
+            // color the intersecting face indices white.
+            for (auto& face_idx: face_indices)
+            {
+
+                std::array<vertex_xnc, 3> intersecting_face{
+                    world_map_vertices[face_idx],
+                    world_map_vertices[face_idx + 1],
+                    world_map_vertices[face_idx + 2]
+                };
+            
+                intersecting_face[0].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                intersecting_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                intersecting_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
+                
+
+                // color the triangle white.
+                glBindVertexArray(aabb_gl_buffer.VAO); 
+                glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
+                auto face_offset = face_idx * sizeof(vertex_xnc);
+
+                GLsizeiptr size = 3 * sizeof(vertex_xnc); // replace vertex color for the entire face.
+                glBufferSubData(GL_ARRAY_BUFFER, face_offset, size, (void*)intersecting_face.data());
+
+                glBindVertexArray(0);
+            }
+
+            previous_face_indices = face_indices;
 
             if (!g_noclip)
             {
                 // first, update the player position and velocity.
                 glm::vec3 right = glm::cross(camera.front, camera.up);
-
-                // plane is combination of v0 and the calculated normal.
-                auto create_planes_from_face_indices = [](std::vector<size_t>& face_indices, std::vector<vertex_xnc>& vertices) -> std::vector<Plane>
-                {
-                    auto planes = std::vector<Plane>{};
-                    for (auto& face_idx: face_indices)
-                    {
-                        planes.push_back(Plane{vertices[face_idx].position, compute_triangle_normal(vertices[face_idx].position, vertices[face_idx + 1].position, vertices[face_idx + 2].position)});
-                    }
-
-                    return planes;
-                };
-
-                auto ground_planes  = create_planes_from_face_indices(ground_face_indices, aabbs_vertices);
-                auto ceiling_planes = create_planes_from_face_indices(ceiling_face_indices, aabbs_vertices);
-                auto wall_planes    = create_planes_from_face_indices(wall_face_indices, aabbs_vertices);
-                auto collider_planes = Collider_Planes{.ground_planes = std::move(ground_planes), .ceiling_planes = std::move(ceiling_planes), .wall_planes = std::move(wall_planes)};
 
                 auto [new_position, new_velocity] = player_move(
                     move_input,
@@ -640,13 +566,13 @@ int main(int argc, char *argv[])
 
                 // draw the faces we collided with (I was using this to disable drawing the rest, and just the colliding faces for debugging.)
                 {
-                    auto construct_faces = [](const std::vector<vertex_xnc>& aabbs_vertices, const std::vector<size_t>& face_indices) {
+                    auto construct_faces = [](const std::vector<vertex_xnc>& world_map_vertices, const std::vector<size_t>& face_indices) {
                         std::vector<vertex_xnc> faces;
                         for (size_t face_idx = 0; face_idx < face_indices.size(); ++face_idx)
                         {
-                                auto& v0 = aabbs_vertices[face_indices[face_idx]];
-                                auto& v1 = aabbs_vertices[face_indices[face_idx] + 1];
-                                auto& v2 = aabbs_vertices[face_indices[face_idx] + 2];
+                                auto& v0 = world_map_vertices[face_indices[face_idx]];
+                                auto& v1 = world_map_vertices[face_indices[face_idx] + 1];
+                                auto& v2 = world_map_vertices[face_indices[face_idx] + 2];
                                 faces.push_back(v0);   
                                 faces.push_back(v1);
                                 faces.push_back(v2);
@@ -655,7 +581,7 @@ int main(int argc, char *argv[])
                         return faces;
                     };
 
-                    auto faces = construct_faces(aabbs_vertices, previous_face_indices);
+                    auto faces = construct_faces(world_map_vertices, previous_face_indices);
                     if (faces.size() > 0)
                     {
                         debug_draw_triangles(

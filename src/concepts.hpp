@@ -134,6 +134,10 @@ private:
 };
 
 
+// timing related
+
+
+
 #define TIMEIT(stmt) do { \
     auto start = std::chrono::high_resolution_clock::now(); \
     stmt; \
@@ -142,12 +146,19 @@ private:
     std::print("{} took {:.3f} ms\n", #stmt, diff.count() / 1000.0); \
 } while(0)
 
+#include <chrono>
+using namespace std::chrono_literals;
+using namespace std::literals;
+
+inline uint64_t get_timestamp_microseconds()
+{
+    auto now = std::chrono::system_clock::now();
+    auto duration = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+}
 
 
-
-
-
-
+// printf related
 
 //@FIXME: move all these formatters to some other place.
 template <>
@@ -206,7 +217,6 @@ void print_network(std::string_view format_str, Args&&... args) {
     // Print the formatted message
     std::print("{}\n", formatted_message);
 }
-
 
 
 

@@ -2,118 +2,36 @@
 #include <chrono>
 #include <string>
 #include <cassert>
-
-// #include "../src/message.hpp"
-#include "../src/udp_socket.hpp"
-
 #include <memory>
+
+#include "../src/AABB.hpp"
+#include "../src/bsp.hpp"
+#include "../src/udp_socket.hpp"
 #include "../src/vec.hpp"
 #include "../src/player_move.hpp" // for Move_Input.
-
-using namespace std::chrono_literals;
-using namespace std::literals;
+#include "../src/server.hpp"
 
 static_assert(sizeof(Message_Type) == sizeof(uint8_t));
 
-constexpr auto sv_max_player_count = 32;
-constexpr auto server_port_number = 2020;
-constexpr auto client_port_number = 2024;
-
-struct Byte_Buffer
+static void process_packet(Server_Connection_State& server_state, const Packet& packet)
 {
-	std::vector<uint8_t> data = std::vector<uint8_t>(2048 * 2048);
-	size_t cursor = 0; // byte_offset to insert at.
-};
-
-// are players unique enough?
-struct Player_State
-{	
-	vec3 position;
-	vec3 front;
-	vec3 velocity;
-};
-
-struct Server_Connection_State
-{
-	std::array<bool, sv_max_player_count> player_slots{};
-	std::array<UDPsocket::IPv4, sv_max_player_count> player_ips{};
-	std::array<Byte_Buffer, sv_max_player_count> player_byte_buffers{};
-};
-
-
-void disconnect_player(Server_Connection_State& server_connection_state, const UDPsocket::IPv4 ip)
-{
-	int idx = 0;
-	for(auto& player_ip: server_connection_state.player_ips)
-	{
-		if (ip == player_ip)
-		{
-			server_connection_state.player_ips[idx] = {};
-			server_connection_state.player_slots[idx] = false;
-			return;
-		}
-		idx += 1;
-	}
 }
 
-
-
-// can return null, i guess. // server player state is not const because I am returning a non-const pointer from it.
-inline Byte_Buffer* get_player_packet_byte_buffer_from_ip(Server_Connection_State& server_connection_state, const UDPsocket::IPv4 ip)
-{
-	int idx = 0;
-	for(auto& player_ip: server_connection_state.player_ips)
-	{
-		if (ip == player_ip) return &server_connection_state.player_byte_buffers[idx];
-		idx += 1;
-	}
-
-	return nullptr;
-}
-
-#include <chrono>
-inline uint64_t get_timestamp_microseconds()
-{
-    auto now = std::chrono::system_clock::now();
-    auto duration = now.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
-}
-
-//@Note: this is mostly incomplete, and just me thinking about what this should look like.
-// each  "player" has a scratchpad buffer, in which packets are stitched together into their original message.
-// currently, there is no 'ack' sent for any data packet, just for the 'connect_to_server_message' packet.
-// this is so we can sort of simulate 'connect to server' behavvior and only do things for those people.
-// the buffer will be the reconstructed contiguous representation of the messages.
-// this means that if messages arrive OoO, we will have segments of the buffer
-// that are still zero. 
 
 //@incomplete: what if a client tries to connect twice?
 //@incomplete: buffer stitching is still sequential.
-
-
-
-// struct IPv4
-// {
-// 	std::array<uint8_t, 4> octets{};
-// 	uint16_t port{};
-
-// Define formatter specialization for ipv4
-template <>
-struct std::formatter<UDPsocket::IPv4> : std::formatter<std::string> {
-    // Format the vec3 as a string
-    auto format(const UDPsocket::IPv4& ip, std::format_context& ctx) const {
-        return std::format_to(ctx.out(), "{}.{}.{}.{}:{}\n", ip.octets[0], ip.octets[1], ip.octets[2], ip.octets[3], ip.port);
-    }
-};
-
-
 int main()
 {
-	//@FIXME: this is very wasteful. but for now, whatever.
-	auto server_connection_state = Server_Connection_State{};
+	// load the same map as we are loading on the client side.
 
-	auto t1 = std::thread([&]
+    auto path = std::string{"../data/just_a_floor_AABBs"};
+    auto aabbs = read_AABBs_from_file(path);
+    auto aabbs_vertices  = to_vertex_xnc(aabbs);
+    BSP* bsp = build_bsp(aabbs_vertices);
+
+	auto t1 = std::thread([&] // to capture the server connection state, but that's actually not necessary?
 	{
+		auto server_connection_state = Server_Connection_State{};
 
 		UDPsocket server_socket{};
 		server_socket.open();
@@ -123,7 +41,6 @@ int main()
 		server_socket.broadcast(true);
 		print_network("[server] open and bound on port {}\n", server_port_number);
 
-
 		auto packet_count = 0;
 		auto byte_offset_from_start = 0;
 		
@@ -131,6 +48,7 @@ int main()
 		int total_packet_count = 0;
 		while (true)
 		{
+		
 			Packet packet{};
 			if (server_socket.recv(packet, ipaddr) < 0) // blocking
 			{
@@ -140,11 +58,12 @@ int main()
 			{	
 
 				total_packet_count += 1;
+				// print_network ("[server] packet received. total packet_count: {}\n", total_packet_count);
+
 			 	// do an immediate handoff to a different thread?
 			 	Message_Type message_type = static_cast<Message_Type>(packet.header.message_type);
 			 	std::string message_string = to_string(message_type);
-			 	print_network("[server] message type: {}\n", message_string);
-				print_network ("[server] packet received. total packet_count: {}\n", total_packet_count);
+			 	// print_network("[server] message type: {}\n", message_string);
 				Byte_Buffer* current_buffer_ptr = nullptr; // non-owning, just point to one.
 
 				// who did we receive this from? do we know this guy?
@@ -182,46 +101,67 @@ int main()
 					}
 				}
 
+				// if we have found the player, get the correct packet byte buffer (to reconstruct the full message if necessary.)
 				if (player_found)
 				{
 					current_buffer_ptr = get_player_packet_byte_buffer_from_ip(server_connection_state, ipaddr);
 				}
 
-				if ((current_buffer_ptr == nullptr) && !player_found) print_network("[server] current_buffer_ptr == nullptr. that's not supposed to happen. crash incoming.\n");
+				if ((current_buffer_ptr == nullptr) && player_found) print_network("[server] current_buffer_ptr == nullptr but we found a player. that's not supposed to happen. crash incoming.\n");
+
 
 				auto& buffer = current_buffer_ptr->data;
-
 				auto& packet_header = packet.header;
-				// are we part of a sequence?
+				// are we part of a sequence? // 
 				if (packet_header.sequence_id > 0)
 				{
+					print_warning("[server] sequenced packet stitching is not correctly implemented!\n");
+
 					print_network("[server] total packets in sequence: {}\n", packet_header.sequence_count);
 					assert(packet_header.sequence_count >= packet_header.sequence_idx);
+
 					std::memcpy(&buffer[byte_offset_from_start], &packet.buffer, packet_header.payload_size);
 					//@FIXME: actually, we should be really careful. this just inserts packages one behind the other.
 					// we need to reconstruct the actual payload.
 					byte_offset_from_start += packet_header.payload_size; 
-				}
-				else
-				{
-					print_network("[server] no other packets in sequence.\n");
-				}
 
-				// if this packet as part of a sequence, and the sequence is complete, hand it off to someone else.
-				if (packet_header.sequence_id > 0 && packet_count == packet_header.sequence_count)
-				{
-					// copy the buffer and zero the buffer.
-					auto handoff_buffer = std::vector<uint8_t>(byte_offset_from_start);
-					std::memcpy(&handoff_buffer[0], &buffer[0], byte_offset_from_start);
-					for(auto idx = 0; idx != byte_offset_from_start; ++idx)
+					// if this packet as part of a sequence, and the sequence is complete, hand it off to someone else.
+					if (packet_header.sequence_id > 0 && packet_count == packet_header.sequence_count)
 					{
-						buffer[idx] = uint8_t{0};
-					}
+						// copy the buffer and zero the buffer.
+						auto handoff_buffer = std::vector<uint8_t>(byte_offset_from_start);
+						std::memcpy(&handoff_buffer[0], &buffer[0], byte_offset_from_start);
+						for(auto idx = 0; idx != byte_offset_from_start; ++idx)
+						{
+							buffer[idx] = uint8_t{0};
+						}
 
-					// process message (handover to different thread?)
-					// process_message(packet, std::move(handoff_buffer));
+						// process message (handover to different thread?)
+						// process_message(packet, std::move(handoff_buffer));
+					}
+				}
+				else // process all one-shot packages
+				{
+					print_network("[server] one-shot package.\n");
+					if (message_type == MESSAGE_PLAYER_MOVE)
+					{
+						// what was this player's previous velocity?
+						auto player_idx = get_player_idx(server_connection_state, ipaddr);
+						auto& player_movement_state = get_player_movement_state(server_connection_state, player_idx);
+		                // auto [new_position, new_velocity] = player_move(
+			            //     move_input,
+			            //     collider_planes,
+			            //     player_position,
+			            //     player_velocity,
+			            //     vec3{camera.front.x, camera.front.y, camera.front.z},
+			            //     vec3{right.x, right.y, right.z},
+			            //     dt);
+
+
+					}
 				}
 
+	
 				if (player_found && packet_header.message_type == Message_Type::MESSAGE_LEAVE_SERVER)
 				{
 					print_network("[server] disconnecting player {} from server.\n", ipaddr);
@@ -235,83 +175,6 @@ int main()
 	});
 
 
-	// auto t2 = std::thread([&](){
-
-	// 	UDPsocket client_socket{};
-	// 	client_socket.open();
-	// 	client_socket.bind(client_port_number);
-	// 	client_socket.broadcast(true);
-	// 						std::this_thread::sleep_for(std::chrono::seconds(1));
-	// 	print_network("[client] started. listening on port {}\n", client_port_number);
-
-	// 	std::this_thread::sleep_for(std::chrono::seconds(3));
-	// 	print_network("[client] done sleeping.\n");
-
-	// 	Packet packet = construct_message_only_packet(MESSAGE_JOIN_SERVER);
-	// 	packet.header.timestamp = get_timestamp_microseconds();
-	// 	client_socket.send(packet, UDPsocket::IPv4::Broadcast(server_port_number));
-	// 	print_network("[client] sent join_server message.\n");
-		
-	// 	// wait for a response.
-	// 	UDPsocket::IPv4 ipaddr{};
-	// 	Packet incoming_packet{};
-	// 	if (client_socket.recv(incoming_packet, ipaddr) < 0) // blocking
-	// 	{
-	// 		fprintf(stderr, "recv(): failed\n");
-	// 	}
-	// 	else
-	// 	{
-	// 		print_network("[client] received a packet.\n");
-	// 		auto& header = packet.header;
-	// 		if (header.message_type == MESSAGE_JOIN_SERVER_ACCEPTED)
-	// 		{
-	// 			print_network("[client] joined server.");
-	// 		}
-
-	// 		vec3 player_position = vec3{0.0f, 10.0f, 0.0f};
-	// 		vec3 player_velocity = vec3{0.0f, 0.0f ,0.0f};
-	// 		vec3 front{1.0f,0.0f, 0.0f};
-	// 		vec3 up{0.0f, 1.0f, 0.0f};
-
-	// 		float dt = 0 ;
-	// 		while (true)
-	// 		{
-	// 			auto start_time = std::chrono::high_resolution_clock::now();
-
-	// 			Move_Input move_input = generate_random_input();
-
-	// 			// send input to the server.
-	// 			std::vector<Packet> packets = convert_to_packets(move_input, MESSAGE_PLAYER_INPUT);
-	// 			assert(packets.size() == 1);	
-	// 			AABB_Traces traces{};
-	// 			auto collider_planes = Collider_Planes{};
-	// 			// simulate
-	// 			auto [new_player_position, new_player_velocity] = my_walk_move(
-	// 				move_input,
-	// 				traces,
-	// 				collider_planes,
-	// 				player_position,
-	// 				player_velocity,
-	// 				front,
-	// 				cross(front, up),
-	// 				dt
-	// 				);
-
-	// 			player_position = new_player_position;
-	// 			player_velocity = new_player_velocity;
-
-
-	// 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-	// 			// Calculate time delta (dt) between frames
-	// 	        auto end_time = std::chrono::high_resolution_clock::now();
-	// 	        std::chrono::duration<float> elapsed_time = end_time - start_time;
-	// 	        dt = elapsed_time.count();  // dt in seconds
-	// 		}
-	// 	}
-	// });
-
-	// t2.join();
 	t1.join();
 
 }

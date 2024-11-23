@@ -18,7 +18,8 @@ enum Message_Type : uint8_t
 	MESSAGE_JOIN_SERVER_ACCEPTED,
 	MESSAGE_RECEIVED, // general ack for each packet?
 	MESSAGE_MISSING_PACKET, // send back an index and a sequence?
-	MESSAGE_PLAYER_INPUT
+	MESSAGE_PLAYER_MOVE,
+	MESSAGE_CHANGE_MAP // user should load this map.
 };
 
 std::string to_string(Message_Type message_type)
@@ -43,9 +44,14 @@ std::string to_string(Message_Type message_type)
 			break;
 		}
 
-		case MESSAGE_PLAYER_INPUT: 
+		case MESSAGE_PLAYER_MOVE: 
 		{
-			result = "MESSAGE_PLAYER_INPUT";
+			result = "MESSAGE_PLAYER_MOVE";
+			break;
+		}
+		case MESSAGE_CHANGE_MAP:
+		{
+			result = "MESSAGE_CHANGE_MAP";
 			break;
 		}
 

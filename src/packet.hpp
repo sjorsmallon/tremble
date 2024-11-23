@@ -129,7 +129,6 @@ std::vector<Packet> convert_to_packets(const Type& input, Message_Type message_t
     }
 }
 
-
 Packet construct_message_only_packet(Message_Type message_type)
 {
 	Packet packet{};

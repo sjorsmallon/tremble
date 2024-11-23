@@ -362,3 +362,13 @@ namespace std
         }
     };
 }
+
+// print stuff.
+template <>
+struct std::formatter<UDPsocket::IPv4> : std::formatter<std::string> {
+    auto format(const UDPsocket::IPv4& ip, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}.{}.{}.{}:{}\n", ip.octets[0], ip.octets[1], ip.octets[2], ip.octets[3], ip.port);
+    }
+};
+
+
