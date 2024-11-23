@@ -1,6 +1,8 @@
 #pragma once
 #include "vec.hpp"
 #include "plane.hpp"
+#include "AABB.hpp"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/norm.hpp>  // for length2
 

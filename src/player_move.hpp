@@ -1,7 +1,7 @@
 #pragma once
 #include <print>
 #include "plane.hpp"
-
+#include "bsp.hpp"
 
 
 /// this should also not be here but it is for now.

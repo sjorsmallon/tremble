@@ -41,6 +41,8 @@ inline void disconnect_player(Server_Connection_State& server_connection_state, 
 		{
 			server_connection_state.player_ips[idx] = {};
 			server_connection_state.player_slots[idx] = false;
+			server_connection_state.player_movement_states[idx] = {};
+
 			return;
 		}
 		idx += 1;
@@ -67,13 +69,12 @@ inline size_t get_player_idx(Server_Connection_State& server_connection_state, c
 	{
 		if (ip == player_ip)
 		{
-			server_connection_state.player_ips[idx] = {};
-			server_connection_state.player_slots[idx] = false;
 			return idx;
 		}
 		idx += 1;
 	}
 
+	print_warning("player not found while get_player_idx is invoked...\n");
 	return -1;
 }
 

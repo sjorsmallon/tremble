@@ -1,6 +1,7 @@
 #pragma once
 #include <print>
 #include "concepts.hpp" // pod
+#include  "player_move.hpp"
 
 static_assert(__cplusplus == 202302L);
 
@@ -61,3 +62,12 @@ std::string to_string(Message_Type message_type)
 	}
 	return result;
 }
+
+struct Player_Move_Message
+{
+	Move_Input move_input;
+	vec3 front;
+	vec3 right;
+};
+
+

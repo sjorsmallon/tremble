@@ -26,6 +26,7 @@ sdl3_lib = declare_dependency(
 # Build test_client_server
 executable('test_client_server', 
   'tst/client_server.cc',
+  include_directories : inc_dir,
   install : false
 )
 

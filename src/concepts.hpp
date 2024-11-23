@@ -136,8 +136,6 @@ private:
 
 // timing related
 
-
-
 #define TIMEIT(stmt) do { \
     auto start = std::chrono::high_resolution_clock::now(); \
     stmt; \
@@ -156,6 +154,31 @@ inline uint64_t get_timestamp_microseconds()
     auto duration = now.time_since_epoch();
     return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
+
+
+#include <future>
+#include <chrono>
+#include <optional>
+
+// Function template to execute a block with a timeout
+template <typename Func>
+std::optional<typename std::invoke_result<Func>::type>
+execute_with_timeout(Func func, int timeout_ms) {
+    using return_type = typename std::invoke_result<Func>::type;
+
+    // Wrap the function execution in a future
+    auto future = std::async(std::launch::async, func);
+
+    // Wait for the result within the timeout
+    if (future.wait_for(std::chrono::milliseconds(timeout_ms)) == std::future_status::ready) {
+        // If ready, return the result
+        return future.get();
+    }
+
+    // If timeout, return empty optional
+    return std::nullopt;
+}
+
 
 
 // printf related

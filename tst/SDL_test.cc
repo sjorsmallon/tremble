@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
         SDL_GL_MakeCurrent(window, gl_context);
 
         // enable vsync
-        SDL_GL_SetSwapInterval(0);
+        SDL_GL_SetSwapInterval(1);
 
         set_global_gl_settings();
     }    
@@ -310,10 +310,17 @@ int main(int argc, char *argv[])
 
     // entity related
     vec3 player_velocity{};
-    vec3 player_position{-6.0320406, 10, 580.2726};
-    auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}}; // 40 x, 65 y (20 off the floor), 40 z.
+    // vec3 player_position{-6.0320406, 10, 580.2726};
+    vec3 player_position{};
+
+    auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}}; // 40 x, 65 y (20 off the floor), 40 z. //@volatile: this needs to stay the same between server and client (so we should store it somewhere central.)
     auto player_aabb_vertices = to_vertex_xnc(player_aabb);
     auto player_aabb_gl_buffer = create_interleaved_xnc_buffer(player_aabb_vertices);
+
+    auto server_player_aabb = AABB{};
+    auto server_player_aabb_vertices = to_vertex_xnc(server_player_aabb);
+    auto server_player_aabb_gl_buffer = create_interleaved_xnc_buffer(server_player_aabb_vertices);
+
 
     Move_Input move_input{};
      // so we can render the "last" colliding hitbox so I can do some manual inspection.
@@ -362,6 +369,7 @@ int main(int argc, char *argv[])
 
     while (running)
     {
+
         last = now;
         //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
         now = SDL_GetPerformanceCounter();
@@ -474,7 +482,6 @@ int main(int argc, char *argv[])
             // color the intersecting face indices white.
             for (auto& face_idx: face_indices)
             {
-
                 std::array<vertex_xnc, 3> intersecting_face{
                     world_map_vertices[face_idx],
                     world_map_vertices[face_idx + 1],
@@ -485,7 +492,6 @@ int main(int argc, char *argv[])
                 intersecting_face[1].color = vec4{1.0f,1.0f,1.0f,1.0f};
                 intersecting_face[2].color = vec4{1.0f,1.0f,1.0f,1.0f};
                 
-
                 // color the triangle white.
                 glBindVertexArray(aabb_gl_buffer.VAO); 
                 glBindBuffer(GL_ARRAY_BUFFER, aabb_gl_buffer.VBO);
@@ -512,6 +518,39 @@ int main(int argc, char *argv[])
                     vec3{camera.front.x, camera.front.y, camera.front.z},
                     vec3{right.x, right.y, right.z},
                     dt);
+
+                // send the move input to the server.
+                auto packets_to_send  = convert_to_packets(Player_Move_Message{
+                    .move_input = move_input,
+                    .front = vec3{camera.front.x, camera.front.y, camera.front.z},
+                    .right = vec3{right.x, right.y, right.z}}, Message_Type::MESSAGE_PLAYER_MOVE);
+
+                assert(packets_to_send.size() == 1);
+
+                // try to send an update for 5 ms.
+                auto result = execute_with_timeout([&]() -> bool
+                {
+                    if (client_socket.send(packets_to_send[0], UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+                    {
+                    }
+                    else 
+                    {
+                        return true;
+                    }
+
+                    return false;
+                }, 10);
+
+                if (result)
+                {
+                    // print_network("[client] sent input.\n");
+                }
+                else
+                {
+                    print_warning("could not send message in 10 ms time allotted. continuing..\n");
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(8)); // ~60 FPS
 
                 player_position = new_position;
                 player_velocity = new_velocity;
@@ -605,6 +644,52 @@ int main(int argc, char *argv[])
                 false // wireframe
             );
 
+            //see if the server has sent anything back.
+            {
+                Packet packet{};
+                // auto result = execute_with_timeout([&]() -> bool
+                // {
+                    if (client_socket.recv(packet, ipaddr) < 0) // blocking
+                    {
+                        print_network("[client] recv failed while waiting for a position.\n");
+                    }
+                    else
+                    {
+                        // return true;
+                    }
+                        
+                    // return false;
+                // }, 5);
+
+                if (true)
+                {
+                    if (packet.header.message_type == MESSAGE_PLAYER_MOVE)
+                    {
+                        print_network("received player move data.\n");
+                        // we have the correct data.
+                        Player_Move_Message* player_move_message_ptr = reinterpret_cast<Player_Move_Message*>(packet.buffer);
+                        std::print("network player position: {}\n", player_move_message_ptr->right);
+                        // abuse the right value by interpreting it as the position.
+                        auto position = player_move_message_ptr->right;
+                        server_player_aabb = AABB{.min = position + player_aabb.min, .max = position + player_aabb.max};
+                        server_player_aabb_vertices = to_vertex_xnc(server_player_aabb);
+
+                        // fully replace the buffer because why not.
+                        glBindVertexArray(server_player_aabb_gl_buffer.VAO); 
+                        glBindBuffer(GL_ARRAY_BUFFER, server_player_aabb_gl_buffer.VBO);
+                        glBufferData(GL_ARRAY_BUFFER, server_player_aabb_vertices.size() * sizeof(vertex_xnc), server_player_aabb_vertices.data(), GL_STATIC_DRAW);
+
+                        draw_triangles(server_player_aabb_gl_buffer.VAO, server_player_aabb_gl_buffer.VBO, server_player_aabb_gl_buffer.vertex_count, xnc_shader_program,
+                        glm::perspective(glm::radians(fov), (float)window_width / (float)window_height, near_z, far_z),
+                        get_look_at_view_matrix(camera),
+                        aabb_transform_matrix,
+                        true //wireframe
+                        );
+
+                    }
+                }
+
+            }
 
 
             if (showing_console)
@@ -697,7 +782,6 @@ int main(int argc, char *argv[])
                             auto& v4 = text_character_vertices[4];
                             auto& v5 = text_character_vertices[5];
 
-                            // std::print("fabs(x1 - x0): {}", );
                             float character_width = fabs(static_cast<float>(character_info.x1) - static_cast<float>(character_info.x0));
                             // float character_width = character_info.xadvance;
                             
@@ -831,6 +915,10 @@ int main(int argc, char *argv[])
 
             }
 
+
+
+
+
         }
 
         SDL_GL_SwapWindow(window);
@@ -841,7 +929,6 @@ int main(int argc, char *argv[])
     Packet leave_server_packet = construct_message_only_packet(Message_Type::MESSAGE_LEAVE_SERVER);
 
     // this is not coming through. why not?
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (client_socket.send(leave_server_packet, UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
     {
         print_network("[client] SENDING FAILED!\n");
