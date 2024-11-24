@@ -329,6 +329,7 @@ int main(int argc, char *argv[])
 
 
     // server stuff
+    bool playing_online = false;
     constexpr auto server_port_number = 2020;
     constexpr auto client_port_number = 2024;
     UDPsocket::IPv4 ipaddr{};
@@ -353,19 +354,33 @@ int main(int argc, char *argv[])
     }
 
     auto join_server_result_packet = Packet{};
-
-    if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // blocking
+    auto result = execute_with_timeout([&]() -> bool
     {
-        print_network("[client] recv failed while waiting for the join_server result.\n");
+        if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // blocking
+        {
+            print_network("[client] recv failed while waiting for the join_server result.\n");
+        }
+            else
+            {
+                if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
+                {
+                    print_network("[client] join server accepted!\n");
+                    return true;
+                }
+            }
+
+            return false;
+        }, 1);
+
+    if (result)
+    {
+        print_network("[client] playing online.\n");
+        playing_online = true;
     }
     else
     {
-        if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
-        {
-            print_network("[client] join server accepted!\n");
-        }
+        print_warning("playing offline\n");
     }
-
 
     while (running)
     {
@@ -528,29 +543,30 @@ int main(int argc, char *argv[])
                 assert(packets_to_send.size() == 1);
 
                 // try to send an update for 5 ms.
-                auto result = execute_with_timeout([&]() -> bool
+                if (playing_online)
                 {
-                    if (client_socket.send(packets_to_send[0], UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+                     auto result = execute_with_timeout([&]() -> bool
                     {
-                    }
-                    else 
+                        if (client_socket.send(packets_to_send[0], UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+                        {
+                        }
+                        else 
+                        {
+                            return true;
+                        }
+
+                        return false;
+                    }, 10);
+
+                    if (result)
                     {
-                        return true;
+                        // print_network("[client] sent input.\n");
                     }
-
-                    return false;
-                }, 10);
-
-                if (result)
-                {
-                    // print_network("[client] sent input.\n");
+                    else
+                    {
+                        print_warning("could not send message in 10 ms time allotted. continuing..\n");
+                    }
                 }
-                else
-                {
-                    print_warning("could not send message in 10 ms time allotted. continuing..\n");
-                }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(8)); // ~60 FPS
 
                 player_position = new_position;
                 player_velocity = new_velocity;
@@ -645,6 +661,7 @@ int main(int argc, char *argv[])
             );
 
             //see if the server has sent anything back.
+            if (playing_online)
             {
                 Packet packet{};
                 // auto result = execute_with_timeout([&]() -> bool
@@ -757,17 +774,16 @@ int main(int argc, char *argv[])
 
                             // get bounding box of this character?
                             stbtt_packedchar& character_info = atlas.character_info[ascii_idx];
-                            vec2 position_screen_pixel_space{};
                             stbtt_aligned_quad quad{}; 
+
                             // float x0,y0,s0,t0; // top-left
                             // float x1,y1,s1,t1; // bottom-right
-
                             stbtt_GetPackedQuad(
                                 atlas.character_info,
                                 atlas.width,
                                 atlas.height,  // same data as above
                                 static_cast<int>(character) - 32,             // character to display
-                               &x_offset, &y_offset,   // pointers to current position in screen pixel space
+                               &x_offset, &y_offset,   // pointers to current position in screen pixel space (these are advanced in this function.)
                                &quad,      // output: quad to draw
                                0);
 
@@ -840,17 +856,11 @@ int main(int argc, char *argv[])
                                 v5 = vertex_xu{.position = vec3{top_right.x, top_right.y, 0.1f}, .uv = top_right_uv};
                             }
 
-
-                            // move the cursor along to the width of the characters. 
-                            // x_offset = x_offset + character_info.xadvance;
-
                             // where in the buffer are we ?
                             int offset = idx * ( 6 * sizeof(vertex_xu));
                             //@note: we should actually map the buffer instead of doing this. but it's whatever.
                             glBufferSubData(GL_ARRAY_BUFFER, offset, text_character_vertices.size() * sizeof(vertex_xu), text_character_vertices.data());
                         }
-                        // ok, all the data has been replaced. now to draw using the vertex_xu shader.
-                        // glActiveTexture(GL_TEXTURE0);
 
                         draw_triangles(
                             text_buffer.VAO,
@@ -929,13 +939,16 @@ int main(int argc, char *argv[])
     Packet leave_server_packet = construct_message_only_packet(Message_Type::MESSAGE_LEAVE_SERVER);
 
     // this is not coming through. why not?
-    if (client_socket.send(leave_server_packet, UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+    if (playing_online)
     {
-        print_network("[client] SENDING FAILED!\n");
-    }
-    else
-    {
-        print_network("[client] disconnecting.\n");
+        if (client_socket.send(leave_server_packet, UDPsocket::IPv4::Broadcast(server_port_number)) < 0)
+        {
+            print_network("[client] SENDING FAILED!\n");
+        }
+        else
+        {
+            print_network("[client] disconnecting.\n");
+        }    
     }
 
     SDL_GL_DestroyContext(gl_context);
