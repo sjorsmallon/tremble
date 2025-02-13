@@ -81,9 +81,16 @@ public:
 	{
 		this->close();
 		sock = (int)::socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+
+
 		if (this->is_closed()) {
 			return (int)Status::SocketError;
 		}
+		// make nonblocking.
+		this->set_nonblocking(sock);
+
+
 		return (int)Status::OK;
 	}
 
@@ -132,6 +139,16 @@ public:
 			return (int)Status::GetSockNameError;
 		}
 		return (int)Status::OK;
+	}
+
+	void set_nonblocking(int sock) {
+	#ifdef _WIN32
+	    u_long mode = 1;
+	    ioctlsocket(sock, FIONBIO, &mode);
+	#else
+	    int flags = fcntl(sock, F_GETFL, 0);
+	    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+	#endif
 	}
 
 	int bind(uint16_t portno)

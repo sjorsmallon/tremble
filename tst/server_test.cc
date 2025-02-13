@@ -30,8 +30,6 @@ int main()
     auto player_collider_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}};
 
 
-	// vec3 player_position{-6.0320406, 10, 580.2726};
-
 	auto t1 = std::thread([&] // to capture the server connection state, but that's actually not necessary?
 	{
 		auto server_connection_state = Server_Connection_State{};

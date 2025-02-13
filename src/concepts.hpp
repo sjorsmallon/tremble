@@ -115,7 +115,7 @@ public:
         return (m_head + m_capacity - 1) % m_capacity;
     }
 
-
+    //@NOTE(SJM): this is currently not used. remove?
     size_t wrap_index(size_t index) const
     {
         return (index + m_capacity) % m_capacity;
@@ -164,7 +164,6 @@ inline uint64_t get_timestamp_microseconds()
 template <typename Func>
 std::optional<typename std::invoke_result<Func>::type>
 execute_with_timeout(Func func, int timeout_ms) {
-    using return_type = typename std::invoke_result<Func>::type;
 
     // Wrap the function execution in a future
     auto future = std::async(std::launch::async, func);

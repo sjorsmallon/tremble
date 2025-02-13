@@ -70,7 +70,7 @@ void GLAPIENTRY opengl_message_callback(
     }
 }
 
-inline void set_global_gl_settings()
+inline void glh_set_global_gl_settings()
 {
    //----modify global openGL state
     {
@@ -705,8 +705,10 @@ struct GL_Texture
     Texture_Format format;
     uint32_t texture_unit; // the "window frame" thing. this needs to be communicated to the shader.
     // configuration? what attributes are active?
+    uint64_t gl_texture_handle; // for bindless textures
 };
 
+// to be deprecated.
 // no texture packing, just assign each texture its own activev texture (window frame).
 GL_Texture register_texture_opengl(std::vector<uint8_t>& data, int width, int height, Texture_Format format)
 {
@@ -767,6 +769,7 @@ GL_Texture register_texture_opengl(std::vector<uint8_t>& data, int width, int he
 
     return gl_texture;
 }
+
 
 
 // ---- drawing

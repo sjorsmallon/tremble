@@ -26,41 +26,10 @@
 #include "../src/input.hpp"
 #include "../src/player_move.hpp"
 #include "../src/udp_socket.hpp"
+#include "../src/keys.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
-
-
-// yuck
-char SDL_Keycode_to_char(SDL_Keycode keycode, bool shift_pressed = false)
-{
-    static const std::unordered_map<SDL_Keycode, std::string> key_map = {
-        { SDLK_A, "aA" }, { SDLK_B, "bB" }, { SDLK_C, "cC" }, { SDLK_D, "dD" },
-        { SDLK_E, "eE" }, { SDLK_F, "fF" }, { SDLK_G, "gG" }, { SDLK_H, "hH" },
-        { SDLK_I, "iI" }, { SDLK_J, "jJ" }, { SDLK_K, "kK" }, { SDLK_L, "lL" },
-        { SDLK_M, "mM" }, { SDLK_N, "nN" }, { SDLK_O, "oO" }, { SDLK_P, "pP" },
-        { SDLK_Q, "qQ" }, { SDLK_R, "rR" }, { SDLK_S, "sS" }, { SDLK_T, "tT" },
-        { SDLK_U, "uU" }, { SDLK_V, "vV" }, { SDLK_W, "wW" }, { SDLK_X, "xX" },
-        { SDLK_Y, "yY" }, { SDLK_Z, "zZ" },
-        { SDLK_0, "0)" }, { SDLK_1, "1!" }, { SDLK_2, "2@" }, { SDLK_3, "3#" },
-        { SDLK_4, "4$" }, { SDLK_5, "5%" }, { SDLK_6, "6^" }, { SDLK_7, "7&" },
-        { SDLK_8, "8*" }, { SDLK_9, "9(" },
-        { SDLK_SPACE, " " }, { SDLK_RETURN, "\n" }, { SDLK_TAB, "\t" },
-        { SDLK_COMMA, ",<" }, { SDLK_PERIOD, ".>" }, { SDLK_SLASH, "/?" },
-        { SDLK_SEMICOLON, ";:" }, { SDLK_APOSTROPHE, "'\"" }, { SDLK_LEFTBRACKET, "[{" },
-        { SDLK_RIGHTBRACKET, "]}" }, { SDLK_BACKSLASH, "\\|" }, { SDLK_MINUS, "-_" },
-        { SDLK_EQUALS, "=+" }, {SDLK_BACKSPACE, "\b\b"}
-    };
-
-    auto it = key_map.find(keycode);
-    if (it != key_map.end()) {
-        return shift_pressed ? it->second[1] : it->second[0];
-    }
-
-    // sentinel value: 0 if not found.
-    return 0;
-}
 
 bool g_noclip = false;
 void toggle_noclip()
@@ -68,51 +37,24 @@ void toggle_noclip()
     g_noclip = !g_noclip;
 }
 
+// module local declaration
+static Keys::Keycode sdl_convert_keyboard_key_to_our_own_key(SDL_Keycode sdl_key);
+static void sdl_print_global_gl_attributes();
+static void sdl_gl_set_attributes_before_creating_a_window();
+
 // argc and argv[] are necessary for SDL3 main compatibility trickery.
 int main(int argc, char *argv[])
 {
     int window_width = 1920;
     int window_height = 1080;
 	SDL_Window* window = nullptr;
-    SDL_GLContext gl_context{};
-    {
-        SDL_SetAppMetadata("tremble", "1.0", "com.example.renderer-clear");
-        SDL_Init(SDL_INIT_VIDEO);
-        // set gl attributes        
-        {
-            bool result;
-            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4): {}\n", result);
-            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5): {}\n", result);
-            result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE): {}\n", result);
-            result = SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 16);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_RED_SIZE,16): {}\n", result);      // 16 bits for red channel
-            result = SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,16);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,16): {}\n", result);    // 16 bits for green channel
-            result = SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,16);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,16): {}\n", result);     // 16 bits for blue channel
-            result = SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,16);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,16): {}\n", result);    // 16 bits for alpha channel
-            result = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24): {}\n", result);   // 24 bits for depth buffer
-            result = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1): {}\n", result);  // Enable double buffering
-            result = SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-            if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
-            std::print("SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8): {}\n", result);  // 8 bits for stencil buffer
-        }
 
+    SDL_GLContext gl_context{}; // here because it needs to be destroyed.
+    {
+        SDL_SetAppMetadata("tremble", "1.0", "com.exa`mple.tremble");
+        SDL_Init(SDL_INIT_VIDEO);
+       
+        sdl_gl_set_attributes_before_creating_a_window();
         // Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
         window = SDL_CreateWindow(
             "Tremble", window_width, window_height, 
@@ -135,41 +77,8 @@ int main(int argc, char *argv[])
         // Create an OpenGL context associated with the window.
         gl_context = SDL_GL_CreateContext(window);
 
-        // get gl attributes
-        {
-            bool result;
-            int value;
-            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE,&value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,&value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE,&value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER: {}\n", value);
-            result = SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &value);
-            if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE failed.\n");
-            std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE: {}\n", value);
-        }
+        // for some own context.
+        sdl_print_global_gl_attributes();
 
         // do some trickery with glad to actually load modern opengl.
         gladLoadGL();
@@ -180,14 +89,13 @@ int main(int argc, char *argv[])
         // enable vsync
         SDL_GL_SetSwapInterval(1);
 
-        set_global_gl_settings();
+        glh_set_global_gl_settings();
     }    
 
     // font stuff
     auto font_size = 22.f;
     // Font font = create_font_at_size("../data/fonts/CONSOLA.ttf", font_size);
     Font font = create_font_at_size("../data/fonts/lucon.ttf", font_size);
-
     const int font_atlas_width = 512;
     const int font_atlas_height = 512;
     Font_Texture_Atlas font_texture_atlas = create_font_texture_atlas(font, font_atlas_width, font_atlas_height);
@@ -197,21 +105,24 @@ int main(int argc, char *argv[])
         font_texture_atlas.atlas_bitmap,
         font_texture_atlas.width,
         font_texture_atlas.height,
-        Texture_Format::Red
+        Texture_Format::Red // put it in the red part of the buffer.
         );
 
     // load the orange 128 * 128 texture.
     const char* texture_name = "../data/textures/orange_with_text.png";
-    int x; 
-    int y;
-    int channels_in_file;
-    int desired_channels = 4;
-    uint8_t* data = stbi_load(texture_name, &x, &y, &channels_in_file, desired_channels);
-    std::print("x: {}, y: {}, channels_in_file: {}\n", x, y, channels_in_file);
-    std::vector<uint8_t> unfolded_data(data, data + ((x * y * channels_in_file) / sizeof(uint8_t)));
-    auto wall_texture = register_texture_opengl(unfolded_data, x, y, Texture_Format::RGBA);
-    auto wall_width = 1024;
-    auto wall_height = 1024;
+    auto texture_width = int32_t{}; 
+    auto texture_height = int32_t{};
+    auto channels_in_file = int32_t{};
+    auto desired_channels = int32_t{4};
+
+    // we own this? we need to free this?
+    uint8_t* data = stbi_load(texture_name, &texture_width, &texture_height, &channels_in_file, desired_channels);
+    std::print("x: {}, texture_height: {}, channels_in_file: {}\n", texture_width, texture_height, channels_in_file);
+    std::vector<uint8_t> unfolded_data(data, data + ((texture_width * texture_height * channels_in_file) / sizeof(uint8_t))); // what the fuck is this?
+
+    auto wall_texture = register_texture_opengl(unfolded_data, texture_width, texture_height, Texture_Format::RGBA);
+    auto wall_width = int32_t{1024};
+    auto wall_height = int32_t{1024};
     auto wall_vertices = generate_vertex_xu_quad_from_plane(vec3{0.f, 0.f, 0.f}, vec3{0.f, 0.f, -1.f}, wall_width, wall_height);
     float tile_size = 256;
     auto wall_tile_scale = float{1024 / tile_size};
@@ -227,9 +138,11 @@ int main(int argc, char *argv[])
 
     // set up the text buffer
     //@FIXME: there have to be better ways to do this. we should move to index buffers.
-    constexpr auto max_character_count_in_string = 512;
-    constexpr auto vertices_per_character = 6;
-    std::vector<vertex_xu> text_character_vertices(max_character_count_in_string * vertices_per_character);
+    constexpr auto max_character_count_in_string = size_t{512};
+    constexpr auto vertices_per_character = size_t{6};
+
+    // since when do I care about this stuff actually?
+    auto text_character_vertices = std::vector<vertex_xu>{max_character_count_in_string * vertices_per_character};
     auto text_characters_gl_buffer = create_interleaved_xu_buffer(text_character_vertices);
 
     // shaders
@@ -254,7 +167,6 @@ int main(int argc, char *argv[])
     uint32_t tiled_vertex_xu_shader_program = create_shader_program(tiled_vertex_xu_vertex_shader_string.c_str(), tiled_vertex_xu_fragment_shader_string.c_str());
     set_uniform(tiled_vertex_xu_shader_program, "base_texture", 1);
     set_uniform(tiled_vertex_xu_shader_program, "tile_scale", wall_tile_scale);
-
 
 
     // base geometry
@@ -354,37 +266,29 @@ int main(int argc, char *argv[])
     }
 
     auto join_server_result_packet = Packet{};
-    auto result = execute_with_timeout([&]() -> bool
-    {
-        if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // blocking
+    // auto result = execute_with_timeout([&]() -> bool
+    // {
+        if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // nonblocking
         {
             print_network("[client] recv failed while waiting for the join_server result.\n");
+            playing_online = false;
+            // return false;
         }
-            else
+        else
+        {
+            if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
             {
-                if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
-                {
-                    print_network("[client] join server accepted!\n");
-                    return true;
-                }
+                print_network("[client] join server accepted!\n");
+                // return true;
+                playing_online = true;
             }
+        }
 
-            return false;
-        }, 1);
-
-    if (result)
-    {
-        print_network("[client] playing online.\n");
-        playing_online = true;
-    }
-    else
-    {
-        print_warning("playing offline\n");
-    }
+        // return false;
+    // }, 10);
 
     while (running)
     {
-
         last = now;
         //@NOTE: SDL_GetPerformanceCounter is too high precision for floats. If I make it double "it just works". (SDL_GetPeformanceCOunter is actually uint64_t).
         now = SDL_GetPerformanceCounter();
@@ -416,21 +320,14 @@ int main(int argc, char *argv[])
 
                     bool shift_pressed = (SDL_GetModState() & SDL_KMOD_SHIFT);
                     bool control_pressed = (SDL_GetModState() & SDL_KMOD_CTRL);
-                    char key = SDL_Keycode_to_char(event.key.key, shift_pressed);
-
-                    if (key == '\b' && control_pressed)
-                    {
-                        // erase the input line
-                        clear_input(console);
-                        continue; // don't do anything else.
-                    } 
+                    uint32_t key = sdl_convert_keyboard_key_to_our_own_key(event.key.key);
 
                     // FIXME: this is not good enough! we need to also be able to pass up, down, left, right
                     // which do not have these ascii values.
-                    if (key != 0) handle_keystroke(console, key); 
+                    handle_keystroke(console, event.key.key, shift_pressed, control_pressed); 
 
-                    //@Note: for now, do it disjointed, so we do not tangle the systems at this point already.
-                    if (key == '\n') {execute_command(command_system, console.history.back());}
+                    //@Note: for now, do it disjointed, so we do not tangle the systems at this point already. This is a good thing!
+                    if (key == KEY_RETURN) {execute_command(command_system, console.history.back());}
                 }
             }
 
@@ -954,4 +851,352 @@ int main(int argc, char *argv[])
     SDL_GL_DestroyContext(gl_context);
 
     return 0;
+}
+
+
+
+
+
+
+static void sdl_gl_set_attributes_before_creating_a_window()
+{
+    constexpr const uint32_t r_opengl_major_version = 4;
+    constexpr const uint32_t r_opengl_minor_version = 5;
+    constexpr const uint32_t r_single_color_channel_bit_width = 16;
+    constexpr const uint32_t r_depth_buffer_bit_width = 24;
+    constexpr const bool r_enable_double_buffering = true;
+    constexpr const uint32_t r_stencil_buffer_bit_width = 8;
+    // set gl attributes        
+    {
+        bool result;
+        result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, r_opengl_major_version);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4): {}\n", result);
+        result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, r_opengl_minor_version);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5): {}\n", result);
+        result = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE): {}\n", result);
+        result = SDL_GL_SetAttribute(SDL_GL_RED_SIZE, r_single_color_channel_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_RED_SIZE,16): {}\n", result);      // 16 bits for red channel
+        result = SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,r_single_color_channel_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE,16): {}\n", result);    // 16 bits for green channel
+        result = SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,r_single_color_channel_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE,16): {}\n", result);     // 16 bits for blue channel
+        result = SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,r_single_color_channel_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,16): {}\n", result);    // 16 bits for alpha channel
+        result = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, r_depth_buffer_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24): {}\n", result);   // 24 bits for depth buffer
+        result = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, r_enable_double_buffering);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1): {}\n", result);  // Enable double buffering
+        result = SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, r_stencil_buffer_bit_width);
+        if (!result) std::print("SDL_Get_Error: {}\n", SDL_GetError());
+        std::print("SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8): {}\n", result);  // 8 bits for stencil buffer
+    }
+}
+
+
+static void sdl_print_global_gl_attributes()
+{
+        // get gl attributes
+    {
+        bool result;
+        int value;
+        result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_RED_SIZE: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE,&value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE,&value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE,&value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER: {}\n", value);
+        result = SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &value);
+        if (!result) std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE failed.\n");
+        std::print("SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE: {}\n", value);
+    }
+}
+
+
+static Keys::Keycode sdl_convert_keyboard_key_to_our_own_key(SDL_Keycode sdl_key)
+{
+
+static auto sdl_key_mapping  = std::unordered_map<SDL_Keycode, Keys::Keycode>{
+   {SDLK_UNKNOWN, KEY_UNKNOWN},
+   {SDLK_RETURN, KEY_RETURN},
+   {SDLK_ESCAPE, KEY_ESCAPE},
+   {SDLK_BACKSPACE, KEY_BACKSPACE},
+   {SDLK_TAB, KEY_TAB},
+   {SDLK_SPACE, KEY_SPACE},
+   {SDLK_EXCLAIM, KEY_EXCLAIM},
+   {SDLK_DBLAPOSTROPHE, KEY_DBLAPOSTROPHE},
+   {SDLK_HASH, KEY_HASH},
+   {SDLK_DOLLAR, KEY_DOLLAR},
+   {SDLK_PERCENT, KEY_PERCENT},
+   {SDLK_AMPERSAND, KEY_AMPERSAND},
+   {SDLK_APOSTROPHE, KEY_APOSTROPHE},
+   {SDLK_LEFTPAREN, KEY_LEFTPAREN},
+   {SDLK_RIGHTPAREN, KEY_RIGHTPAREN},
+   {SDLK_ASTERISK, KEY_ASTERISK},
+   {SDLK_PLUS, KEY_PLUS},
+   {SDLK_COMMA, KEY_COMMA},
+   {SDLK_MINUS, KEY_MINUS},
+   {SDLK_PERIOD, KEY_PERIOD},
+   {SDLK_SLASH, KEY_SLASH},
+   {SDLK_0, KEY_0},
+   {SDLK_1, KEY_1},
+   {SDLK_2, KEY_2},
+   {SDLK_3, KEY_3},
+   {SDLK_4, KEY_4},
+   {SDLK_5, KEY_5},
+   {SDLK_6, KEY_6},
+   {SDLK_7, KEY_7},
+   {SDLK_8, KEY_8},
+   {SDLK_9, KEY_9},
+   {SDLK_COLON, KEY_COLON},
+   {SDLK_SEMICOLON, KEY_SEMICOLON},
+   {SDLK_LESS, KEY_LESS},
+   {SDLK_EQUALS, KEY_EQUALS},
+   {SDLK_GREATER, KEY_GREATER},
+   {SDLK_QUESTION, KEY_QUESTION},
+   {SDLK_AT, KEY_AT},
+   {SDLK_LEFTBRACKET, KEY_LEFTBRACKET},
+   {SDLK_BACKSLASH, KEY_BACKSLASH},
+   {SDLK_RIGHTBRACKET, KEY_RIGHTBRACKET},
+   {SDLK_CARET, KEY_CARET},
+   {SDLK_UNDERSCORE, KEY_UNDERSCORE},
+   {SDLK_GRAVE, KEY_GRAVE},
+   {SDLK_A, KEY_A},
+   {SDLK_B, KEY_B},
+   {SDLK_C, KEY_C},
+   {SDLK_D, KEY_D},
+   {SDLK_E, KEY_E},
+   {SDLK_F, KEY_F},
+   {SDLK_G, KEY_G},
+   {SDLK_H, KEY_H},
+   {SDLK_I, KEY_I},
+   {SDLK_J, KEY_J},
+   {SDLK_K, KEY_K},
+   {SDLK_L, KEY_L},
+   {SDLK_M, KEY_M},
+   {SDLK_N, KEY_N},
+   {SDLK_O, KEY_O},
+   {SDLK_P, KEY_P},
+   {SDLK_Q, KEY_Q},
+   {SDLK_R, KEY_R},
+   {SDLK_S, KEY_S},
+   {SDLK_T, KEY_T},
+   {SDLK_U, KEY_U},
+   {SDLK_V, KEY_V},
+   {SDLK_W, KEY_W},
+   {SDLK_X, KEY_X},
+   {SDLK_Y, KEY_Y},
+   {SDLK_Z, KEY_Z},
+   {SDLK_LEFTBRACE, KEY_LEFTBRACE},
+   {SDLK_PIPE, KEY_PIPE},
+   {SDLK_RIGHTBRACE, KEY_RIGHTBRACE},
+   {SDLK_TILDE, KEY_TILDE},
+   {SDLK_DELETE, KEY_DELETE},
+   {SDLK_PLUSMINUS, KEY_PLUSMINUS},
+   {SDLK_CAPSLOCK, KEY_CAPSLOCK},
+   {SDLK_F1, KEY_F1},
+   {SDLK_F2, KEY_F2},
+   {SDLK_F3, KEY_F3},
+   {SDLK_F4, KEY_F4},
+   {SDLK_F5, KEY_F5},
+   {SDLK_F6, KEY_F6},
+   {SDLK_F7, KEY_F7},
+   {SDLK_F8, KEY_F8},
+   {SDLK_F9, KEY_F9},
+   {SDLK_F10, KEY_F10},
+   {SDLK_F11, KEY_F11},
+   {SDLK_F12, KEY_F12},
+   {SDLK_PRINTSCREEN, KEY_PRINTSCREEN},
+   {SDLK_SCROLLLOCK, KEY_SCROLLLOCK},
+   {SDLK_PAUSE, KEY_PAUSE},
+   {SDLK_INSERT, KEY_INSERT},
+   {SDLK_HOME, KEY_HOME},
+   {SDLK_PAGEUP, KEY_PAGEUP},
+   {SDLK_END, KEY_END},
+   {SDLK_PAGEDOWN, KEY_PAGEDOWN},
+   {SDLK_RIGHT, KEY_RIGHT},
+   {SDLK_LEFT, KEY_LEFT},
+   {SDLK_DOWN, KEY_DOWN},
+   {SDLK_UP, KEY_UP},
+   {SDLK_NUMLOCKCLEAR, KEY_NUMLOCKCLEAR},
+   {SDLK_KP_DIVIDE, KEY_KP_DIVIDE},
+   {SDLK_KP_MULTIPLY, KEY_KP_MULTIPLY},
+   {SDLK_KP_MINUS, KEY_KP_MINUS},
+   {SDLK_KP_PLUS, KEY_KP_PLUS},
+   {SDLK_KP_ENTER, KEY_KP_ENTER},
+   {SDLK_KP_1, KEY_KP_1},
+   {SDLK_KP_2, KEY_KP_2},
+   {SDLK_KP_3, KEY_KP_3},
+   {SDLK_KP_4, KEY_KP_4},
+   {SDLK_KP_5, KEY_KP_5},
+   {SDLK_KP_6, KEY_KP_6},
+   {SDLK_KP_7, KEY_KP_7},
+   {SDLK_KP_8, KEY_KP_8},
+   {SDLK_KP_9, KEY_KP_9},
+   {SDLK_KP_0, KEY_KP_0},
+   {SDLK_KP_PERIOD, KEY_KP_PERIOD},
+   {SDLK_APPLICATION, KEY_APPLICATION},
+   {SDLK_POWER, KEY_POWER},
+   {SDLK_KP_EQUALS, KEY_KP_EQUALS},
+   {SDLK_F13, KEY_F13},
+   {SDLK_F14, KEY_F14},
+   {SDLK_F15, KEY_F15},
+   {SDLK_F16, KEY_F16},
+   {SDLK_F17, KEY_F17},
+   {SDLK_F18, KEY_F18},
+   {SDLK_F19, KEY_F19},
+   {SDLK_F20, KEY_F20},
+   {SDLK_F21, KEY_F21},
+   {SDLK_F22, KEY_F22},
+   {SDLK_F23, KEY_F23},
+   {SDLK_F24, KEY_F24},
+   {SDLK_EXECUTE, KEY_EXECUTE},
+   {SDLK_HELP, KEY_HELP},
+   {SDLK_MENU, KEY_MENU},
+   {SDLK_SELECT, KEY_SELECT},
+   {SDLK_STOP, KEY_STOP},
+   {SDLK_AGAIN, KEY_AGAIN},
+   {SDLK_UNDO, KEY_UNDO},
+   {SDLK_CUT, KEY_CUT},
+   {SDLK_COPY, KEY_COPY},
+   {SDLK_PASTE, KEY_PASTE},
+   {SDLK_FIND, KEY_FIND},
+   {SDLK_MUTE, KEY_MUTE},
+   {SDLK_VOLUMEUP, KEY_VOLUMEUP},
+   {SDLK_VOLUMEDOWN, KEY_VOLUMEDOWN},
+   {SDLK_KP_COMMA, KEY_KP_COMMA},
+   {SDLK_KP_EQUALSAS400, KEY_KP_EQUALSAS400},
+   {SDLK_ALTERASE, KEY_ALTERASE},
+   {SDLK_SYSREQ, KEY_SYSREQ},
+   {SDLK_CANCEL, KEY_CANCEL},
+   {SDLK_CLEAR, KEY_CLEAR},
+   {SDLK_PRIOR, KEY_PRIOR},
+   {SDLK_RETURN2, KEY_RETURN2},
+   {SDLK_SEPARATOR, KEY_SEPARATOR},
+   {SDLK_OUT, KEY_OUT},
+   {SDLK_OPER, KEY_OPER},
+   {SDLK_CLEARAGAIN, KEY_CLEARAGAIN},
+   {SDLK_CRSEL, KEY_CRSEL},
+   {SDLK_EXSEL, KEY_EXSEL},
+   {SDLK_KP_00, KEY_KP_00},
+   {SDLK_KP_000, KEY_KP_000},
+   {SDLK_THOUSANDSSEPARATOR, KEY_THOUSANDSSEPARATOR},
+   {SDLK_DECIMALSEPARATOR, KEY_DECIMALSEPARATOR},
+   {SDLK_CURRENCYUNIT, KEY_CURRENCYUNIT},
+   {SDLK_CURRENCYSUBUNIT, KEY_CURRENCYSUBUNIT},
+   {SDLK_KP_LEFTPAREN, KEY_KP_LEFTPAREN},
+   {SDLK_KP_RIGHTPAREN, KEY_KP_RIGHTPAREN},
+   {SDLK_KP_LEFTBRACE, KEY_KP_LEFTBRACE},
+   {SDLK_KP_RIGHTBRACE, KEY_KP_RIGHTBRACE},
+   {SDLK_KP_TAB, KEY_KP_TAB},
+   {SDLK_KP_BACKSPACE, KEY_KP_BACKSPACE},
+   {SDLK_KP_A, KEY_KP_A},
+   {SDLK_KP_B, KEY_KP_B},
+   {SDLK_KP_C, KEY_KP_C},
+   {SDLK_KP_D, KEY_KP_D},
+   {SDLK_KP_E, KEY_KP_E},
+   {SDLK_KP_F, KEY_KP_F},
+   {SDLK_KP_XOR, KEY_KP_XOR},
+   {SDLK_KP_POWER, KEY_KP_POWER},
+   {SDLK_KP_PERCENT, KEY_KP_PERCENT},
+   {SDLK_KP_LESS, KEY_KP_LESS},
+   {SDLK_KP_GREATER, KEY_KP_GREATER},
+   {SDLK_KP_AMPERSAND, KEY_KP_AMPERSAND},
+   {SDLK_KP_DBLAMPERSAND, KEY_KP_DBLAMPERSAND},
+   {SDLK_KP_VERTICALBAR, KEY_KP_VERTICALBAR},
+   {SDLK_KP_DBLVERTICALBAR, KEY_KP_DBLVERTICALBAR},
+   {SDLK_KP_COLON, KEY_KP_COLON},
+   {SDLK_KP_HASH, KEY_KP_HASH},
+   {SDLK_KP_SPACE, KEY_KP_SPACE},
+   {SDLK_KP_AT, KEY_KP_AT},
+   {SDLK_KP_EXCLAM, KEY_KP_EXCLAM},
+   {SDLK_KP_MEMSTORE, KEY_KP_MEMSTORE},
+   {SDLK_KP_MEMRECALL, KEY_KP_MEMRECALL},
+   {SDLK_KP_MEMCLEAR, KEY_KP_MEMCLEAR},
+   {SDLK_KP_MEMADD, KEY_KP_MEMADD},
+   {SDLK_KP_MEMSUBTRACT, KEY_KP_MEMSUBTRACT},
+   {SDLK_KP_MEMMULTIPLY, KEY_KP_MEMMULTIPLY},
+   {SDLK_KP_MEMDIVIDE, KEY_KP_MEMDIVIDE},
+   {SDLK_KP_PLUSMINUS, KEY_KP_PLUSMINUS},
+   {SDLK_KP_CLEAR, KEY_KP_CLEAR},
+   {SDLK_KP_CLEARENTRY, KEY_KP_CLEARENTRY},
+   {SDLK_KP_BINARY, KEY_KP_BINARY},
+   {SDLK_KP_OCTAL, KEY_KP_OCTAL},
+   {SDLK_KP_DECIMAL, KEY_KP_DECIMAL},
+   {SDLK_KP_HEXADECIMAL, KEY_KP_HEXADECIMAL},
+   {SDLK_LCTRL, KEY_LCTRL},
+   {SDLK_LSHIFT, KEY_LSHIFT},
+   {SDLK_LALT, KEY_LALT},
+   {SDLK_LGUI, KEY_LGUI},
+   {SDLK_RCTRL, KEY_RCTRL},
+   {SDLK_RSHIFT, KEY_RSHIFT},
+   {SDLK_RALT, KEY_RALT},
+   {SDLK_RGUI, KEY_RGUI},
+   {SDLK_MODE, KEY_MODE},
+   {SDLK_SLEEP, KEY_SLEEP},
+   {SDLK_WAKE, KEY_WAKE},
+   {SDLK_CHANNEL_INCREMENT, KEY_CHANNEL_INCREMENT},
+   {SDLK_CHANNEL_DECREMENT, KEY_CHANNEL_DECREMENT},
+   {SDLK_MEDIA_PLAY, KEY_MEDIA_PLAY},
+   {SDLK_MEDIA_PAUSE, KEY_MEDIA_PAUSE},
+   {SDLK_MEDIA_RECORD, KEY_MEDIA_RECORD},
+   {SDLK_MEDIA_FAST_FORWARD, KEY_MEDIA_FAST_FORWARD},
+   {SDLK_MEDIA_REWIND, KEY_MEDIA_REWIND},
+   {SDLK_MEDIA_NEXT_TRACK, KEY_MEDIA_NEXT_TRACK},
+   {SDLK_MEDIA_PREVIOUS_TRACK, KEY_MEDIA_PREVIOUS_TRACK},
+   {SDLK_MEDIA_STOP, KEY_MEDIA_STOP},
+   {SDLK_MEDIA_EJECT, KEY_MEDIA_EJECT},
+   {SDLK_MEDIA_PLAY_PAUSE, KEY_MEDIA_PLAY_PAUSE},
+   {SDLK_MEDIA_SELECT, KEY_MEDIA_SELECT},
+   {SDLK_AC_NEW, KEY_AC_NEW},
+   {SDLK_AC_OPEN, KEY_AC_OPEN},
+   {SDLK_AC_CLOSE, KEY_AC_CLOSE},
+   {SDLK_AC_EXIT, KEY_AC_EXIT},
+   {SDLK_AC_SAVE, KEY_AC_SAVE},
+   {SDLK_AC_PRINT, KEY_AC_PRINT},
+   {SDLK_AC_PROPERTIES, KEY_AC_PROPERTIES},
+   {SDLK_AC_SEARCH, KEY_AC_SEARCH},
+   {SDLK_AC_HOME, KEY_AC_HOME},
+   {SDLK_AC_BACK, KEY_AC_BACK},
+   {SDLK_AC_FORWARD, KEY_AC_FORWARD},
+   {SDLK_AC_STOP, KEY_AC_STOP},
+   {SDLK_AC_REFRESH, KEY_AC_REFRESH},
+   {SDLK_AC_BOOKMARKS, KEY_AC_BOOKMARKS},
+   {SDLK_SOFTLEFT, KEY_SOFTLEFT},
+   {SDLK_SOFTRIGHT, KEY_SOFTRIGHT},
+   {SDLK_CALL, KEY_CALL},
+   {SDLK_ENDCALL, KEY_ENDCALL} };
+
+   return sdl_key_mapping[sdl_key];
+
 }
