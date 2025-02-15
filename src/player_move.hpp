@@ -580,7 +580,7 @@ std::tuple<vec3, vec3> player_move(
     auto traces = AABB_Traces{};
 
     //@FIXME: just pick the first ground plane? how do we even deal with this?
-    if (collider_planes.ground_planes.size() > 1) std::print("[WARNING] more than one ground plane found. picking the first one.\n");
+    // if (collider_planes.ground_planes.size() > 1) std::print("[WARNING] more than one ground plane found. picking the first one.\n");
 
     if (!collider_planes.ground_planes.empty())
     {
@@ -629,7 +629,7 @@ std::tuple<Collider_Planes, std::vector<size_t>> collect_and_classify_intersecti
     // which I think is the side of the adjacent aabb.
     // are we intersecting by a large enough "penetration depth"?
     constexpr auto PENETRATION_DEPTH_TRESHOLD = 2.f;
- 
+
     constexpr auto CEILING_ANGLE_COS_TRESHOLD =  -.707f; // 45 degree angle -(cos(45 degrees)) -> -cos(0,785398 rads)
     constexpr auto FLOOR_ANGLE_COS_TRESHOLD =  .707f; // 45 degree angle (cos(45 degrees)) -> cos(0,785398 rads)
 

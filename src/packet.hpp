@@ -32,12 +32,13 @@ constexpr size_t MAX_BUFFER_SIZE_IN_BYTES = 1452 - sizeof(Packet_Header);
 struct Packet
 {
 	Packet_Header header;
+	int padding_for_alignment;
 	uint8_t buffer[MAX_BUFFER_SIZE_IN_BYTES];
 };
 
 //safeguarding myself, 
 static_assert(sizeof(Packet_Header) == 16);
-// static_assert(sizeof(Packet) <= 1452); //
+static_assert(sizeof(Packet) == (sizeof(Packet_Header) + sizeof(int) + (MAX_BUFFER_SIZE_IN_BYTES * sizeof(uint8_t)))); //
 
 template <typename Type>
 requires Pod<Type> || PodVectorConcept<Type>

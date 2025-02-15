@@ -240,6 +240,27 @@ public:
 		return ret;
 	}
 
+
+	int recv_nonblocking_but_try_every_so_often(Packet& message, IPv4& ipaddr, const int max_wait_time_ms, const int check_interval_ms)
+	{
+	    int elapsed_time = 0;
+	    int result{};
+
+	    while (elapsed_time < max_wait_time_ms)
+		{
+			result = this->recv(message, ipaddr);
+			if (result > 0) break;
+
+		    // Wait for 10ms before the next check
+		    std::this_thread::sleep_for(std::chrono::milliseconds(check_interval_ms));
+		    elapsed_time += check_interval_ms;
+		}
+
+		return result;
+	}
+
+
+
 public:
 	int broadcast(int opt) const
 	{

@@ -8,6 +8,8 @@ struct Console
 	Ring_Buffer<std::string> history = Ring_Buffer<std::string>(1000); // 1000 lines ought to be enough for anybody.
 	std::string input_buffer; // FIXME: preallocate?
     size_t caret_idx; // place the caret before this character.
+
+    // some state to keep track of whether we are currently scrolling through the history.
     bool currently_scrolling_through_history_via_up_arrow;
     size_t index_of_history_entry_that_is_currently_displayed;
 };
@@ -24,6 +26,8 @@ inline void handle_keystroke(Console& console, Keys::Keycode key, bool shift_pre
     {
         console.history.push(console.input_buffer);
         console.input_buffer.clear();
+        console.index_of_history_entry_that_is_currently_displayed = 0;
+        console.currently_scrolling_through_history_via_up_arrow = false;
         return;
     }
     if (key == KEY_BACKSPACE)
@@ -59,7 +63,7 @@ inline void handle_keystroke(Console& console, Keys::Keycode key, bool shift_pre
         if (!console.currently_scrolling_through_history_via_up_arrow)
         {
             if (console.history.size() == 0) return;
-            
+
             console.currently_scrolling_through_history_via_up_arrow = true;
             console.index_of_history_entry_that_is_currently_displayed = console.history.index_of_latest_entry();
 
@@ -117,8 +121,6 @@ inline void handle_keystroke(Console& console, Keys::Keycode key, bool shift_pre
             }
         }
     }
-
-
 
     char maybe_character = Keys::keycode_to_char(key, shift_pressed);
     if (maybe_character)

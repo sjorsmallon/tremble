@@ -48,7 +48,6 @@ int main()
 		UDPsocket::IPv4 ipaddr{};
 		int total_packet_count = 0;
 
-    	
     	auto last = high_resolution_clock::now();
 
 		while (true)
@@ -57,7 +56,8 @@ int main()
 			Packet packet{};
 			if (server_socket.recv(packet, ipaddr) < 0) // blocking
 			{
-				fprintf(stderr, "recv(): failed\n");
+				//
+				// fprintf(stderr, "recv(): failed\n");
 			}
 			else
 			{	
@@ -106,7 +106,7 @@ int main()
 							packet.header.timestamp = get_timestamp_microseconds();
 							server_socket.send(join_server_accepted_packet, UDPsocket::IPv4::Broadcast(client_port_number));
 
-							print_network("[server] sent acceptance packet.\n");
+							print_network("[server] sent player connection acceptance packet.\n");
 							break;
 						}
 					}
@@ -164,10 +164,6 @@ int main()
 				{
 					auto player_aabb = AABB{.min = player_movement_state.position + player_collider_aabb.min, .max = player_movement_state.position + player_collider_aabb.max};
         			auto [collider_planes, all_face_indices] = collect_and_classify_intersecting_planes(map_bsp, map_vertices, player_aabb);
-        			for (auto& plane: collider_planes.ground_planes)
-        			{
-        				std::print("ground plane: {}", plane);
-        			}
 
 	                auto [new_position, new_velocity] = player_move(
 		                move_input,
@@ -199,7 +195,7 @@ int main()
 
 				}
 
-				std::this_thread::sleep_for(milliseconds(16)); // ~60 FPS
+				std::this_thread::sleep_for(milliseconds(15)); // ~60 FPS
 			}
 		}
 

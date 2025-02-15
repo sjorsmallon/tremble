@@ -176,10 +176,10 @@ int main(int argc, char *argv[])
     // i do not trust auto assignment.
     std::vector<vertex_xnc> base_aabbs_vertices = world_map_vertices;
     auto aabb_gl_buffer = create_interleaved_xnc_buffer(world_map_vertices);
-    BSP* world_map_bsp = build_bsp(world_map_vertices);
+    BSP* world_map_bsp = build_bsp(world_map_vertices); //@FIXME: this is never freed. nice.
 
     // console geometry
-    auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)};
+    auto console_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height)}; // upper half of the screen.
     auto console_max = vec2{.x = static_cast<float>(window_width), .y = static_cast<float>(window_height)};
     auto console_background_vertices = generate_vertex_x_quad(console_min, console_max);
     auto text_entry_bar_min = vec2{.x = 0.f, .y = 0.5f * static_cast<float>(window_height) - 2 * font_size};
@@ -211,19 +211,19 @@ int main(int argc, char *argv[])
     bool showing_console = false;
 
     auto camera = Camera{};
-    camera.yaw= -90.f;
+    camera.yaw   = -90.f;
     camera.pitch = 0.f;
-    float noclip_move_speed = 500.0f;
-    float mouse_sensitivity = 2.0f;
-    float fov = 90.0f;
+    float noclip_move_speed = 1000.0f;
+    float mouse_sensitivity = 1.f;
+    float fov = 105.0f;
     float near_z = 0.1f;
-    float far_z = 4000.f;
+    float far_z = 4000.f; // the projection matrix z should be as far as the bounds of the map. I think this is the way quake does it.
     vec3 world_up = vec3{0.f, 1.f, 0.f};
 
     // entity related
     vec3 player_velocity{};
     // vec3 player_position{-6.0320406, 10, 580.2726};
-    vec3 player_position{};
+    vec3 player_position{0.0f, 10.f, 0.f};
 
     auto player_aabb = AABB{.min = vec3{-20.0f, -20.0f, -20.0f}, .max = {20.0f, 45.f, 20.f}}; // 40 x, 65 y (20 off the floor), 40 z. //@volatile: this needs to stay the same between server and client (so we should store it somewhere central.)
     auto player_aabb_vertices = to_vertex_xnc(player_aabb);
@@ -265,28 +265,24 @@ int main(int argc, char *argv[])
         }
     }
 
+    const int MAX_WAIT_TIME_MS = 100;
+    const int CHECK_INTERVAL_MS = 10;
     auto join_server_result_packet = Packet{};
-    // auto result = execute_with_timeout([&]() -> bool
-    // {
-        if (client_socket.recv(join_server_result_packet, ipaddr) < 0) // nonblocking
-        {
-            print_network("[client] recv failed while waiting for the join_server result.\n");
-            playing_online = false;
-            // return false;
-        }
-        else
-        {
-            if (join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
-            {
-                print_network("[client] join server accepted!\n");
-                // return true;
-                playing_online = true;
-            }
-        }
+    auto join_result  = client_socket.recv_nonblocking_but_try_every_so_often(join_server_result_packet, ipaddr, MAX_WAIT_TIME_MS, CHECK_INTERVAL_MS);
+  
+    if (join_result > 0 && join_server_result_packet.header.message_type == Message_Type::MESSAGE_JOIN_SERVER_ACCEPTED)
+    {
+        print_network("[client] join server accepted!\n");
+        playing_online = true;
+    }
+    else
+    {
+        print_network("[client] playing offline.\n");
+    }
 
-        // return false;
-    // }, 10);
 
+    size_t fps = 0;
+    size_t frame_counter = 0;
     while (running)
     {
         last = now;
@@ -294,10 +290,14 @@ int main(int argc, char *argv[])
         now = SDL_GetPerformanceCounter();
         dt = (double)((now - last) * 1000 / (double)SDL_GetPerformanceFrequency()) / 1000.0; // Convert to seconds
 
+        fps = double{1.0} / dt;
+        frame_counter += 1;
+
+
         last_mouse_x = mouse_x;
         last_mouse_y = mouse_y;
 
-        // handle quitting etc.
+        // handle quitting etc. 
          while (SDL_PollEvent(&event))
         {
             // ignore all events except quit (alt-f4, pressing x, etc)
@@ -322,12 +322,15 @@ int main(int argc, char *argv[])
                     bool control_pressed = (SDL_GetModState() & SDL_KMOD_CTRL);
                     uint32_t key = sdl_convert_keyboard_key_to_our_own_key(event.key.key);
 
-                    // FIXME: this is not good enough! we need to also be able to pass up, down, left, right
-                    // which do not have these ascii values.
                     handle_keystroke(console, event.key.key, shift_pressed, control_pressed); 
 
                     //@Note: for now, do it disjointed, so we do not tangle the systems at this point already. This is a good thing!
-                    if (key == KEY_RETURN) {execute_command(command_system, console.history.back());}
+                    if (key == KEY_RETURN)
+                    {
+                        execute_command(command_system, console.history.back());
+                        //@Hack: reset player velocity. should actually be part of the command.
+                        player_velocity = vec3{0};
+                    }
                 }
             }
 
@@ -341,7 +344,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        // handle keyboard input.
+        // handle keyboard input. this is polling, which seemed more reliable. although I do not remember why. 
         {
             const bool* key_state = SDL_GetKeyboardState(NULL);
             if (key_state[SDL_SCANCODE_ESCAPE]) running = false;
@@ -360,7 +363,8 @@ int main(int argc, char *argv[])
                     std::print("camera.pitch: {}\n", camera.pitch);
             }
 
-            // collision detection.
+            // collision detection (before moving the player, I guess. That's why it is in keyboard handling.)
+
             std::vector<size_t> face_indices;
             // restore color to the previous face_indices
             for (auto& face_idx: previous_face_indices)
@@ -384,12 +388,17 @@ int main(int argc, char *argv[])
 
             // update player_aabb to world space (to visualize any collisions.)
             auto aabb = AABB{.min = player_position + player_aabb.min, .max = player_position + player_aabb.max};
-            auto [collider_planes, all_face_indices] = collect_and_classify_intersecting_planes(world_map_bsp, world_map_vertices, aabb);
+            auto [collider_planes, collider_face_indices] = collect_and_classify_intersecting_planes(world_map_bsp, world_map_vertices, aabb);
 
             if (g_noclip)
             {
                 face_indices = previous_face_indices;
             }
+            else
+            {
+                face_indices = collider_face_indices;
+            }
+
 
             // color the intersecting face indices white.
             for (auto& face_idx: face_indices)
@@ -557,23 +566,21 @@ int main(int argc, char *argv[])
                 false // wireframe
             );
 
+
             //see if the server has sent anything back.
             if (playing_online)
             {
                 Packet packet{};
-                // auto result = execute_with_timeout([&]() -> bool
-                // {
-                    if (client_socket.recv(packet, ipaddr) < 0) // blocking
-                    {
-                        print_network("[client] recv failed while waiting for a position.\n");
-                    }
-                    else
-                    {
-                        // return true;
-                    }
-                        
-                    // return false;
-                // }, 5);
+
+                if (client_socket.recv(packet, ipaddr) < 0) // blocking
+                {
+                    print_network("[client] recv failed while waiting for a position.\n");
+                }
+                else
+                {
+                    // return true;
+                }
+           
 
                 if (true)
                 {
@@ -832,7 +839,7 @@ int main(int argc, char *argv[])
     }
 
 
-        // send a quick disconnect message (for my own sake.)
+    // send a quick disconnect message (for my own sake.)
     Packet leave_server_packet = construct_message_only_packet(Message_Type::MESSAGE_LEAVE_SERVER);
 
     // this is not coming through. why not?
