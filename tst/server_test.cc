@@ -195,7 +195,7 @@ int main()
 
 				}
 
-				std::this_thread::sleep_for(milliseconds(15)); // ~60 FPS
+				std::this_thread::sleep_for(milliseconds(1)); // ~60 FPS
 			}
 		}
 
